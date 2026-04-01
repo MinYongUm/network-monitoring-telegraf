@@ -3,23 +3,37 @@ network-monitoring-telegraf / scripts/aci_collector.py
 
 목적:
     Cisco ACI APIC REST API 에서 메트릭을 수집하고
-    Telegraf line protocol 형식으로 stdout 에 출력하는 스크립트
+    InfluxDB HTTP API 로 직접 write 하는 스크립트
 
 수집 항목:
-    - faultInst       : Fault 목록 (severity 별 집계: critical/major/minor/warning)
+    - faultInst        : Fault 목록 (severity 별 집계: critical/major/minor/warning)
     - fabricHealthTotal: Fabric 전체 Health Score
-    - fabricNode      : ACI Node 상태 (APIC/Leaf/Spine)
+    - fabricNode       : ACI Node 상태 (APIC/Leaf/Spine)
 
-실행 방식:
-    Telegraf exec 플러그인이 interval(60s) 마다 이 스크립트를 호출
-    수집 결과를 stdout 으로 출력 → Telegraf 가 파싱 → InfluxDB 전송
+실행 방식 (v0.2.0 변경):
+    aci-collector 컨테이너가 이 스크립트를 루프로 직접 실행 (COLLECT_INTERVAL 주기)
+    수집 결과를 InfluxDB HTTP API 로 직접 write
+    Telegraf exec 플러그인 의존성 제거 (aci_rest.conf 삭제)
 
-환경변수 (docker-compose.yml 의 telegraf/aci-collector 서비스에서 주입):
-    APIC_URL      : ACI APIC URL (예: https://192.168.1.1)
-    APIC_USERNAME : Read-only 계정명
-    APIC_PASSWORD : 계정 비밀번호
+아키텍처 변경 이력:
+    v0.1.x: Telegraf exec 플러그인 → stdout line protocol → Telegraf → InfluxDB
+    v0.2.0: aci-collector 루프 → InfluxDB 직접 write (C안)
 
-line protocol 출력 예시:
+    C안 채택 근거:
+        A안 (telegraf 에 python3 추가): 최소 권한 원칙 위반, 불필요한 패키지 증가
+        B안 (Flask HTTP 서버): 불필요한 포트 노출, 구조 복잡
+        C안 (InfluxDB 직접 write): 크리덴셜 격리, 공격 표면 최소화
+
+환경변수 (docker-compose.yml 의 aci-collector 서비스에서 주입):
+    APIC_URL          : ACI APIC URL (예: https://192.168.1.1)
+    APIC_USERNAME     : Read-only 계정명
+    APIC_PASSWORD     : 계정 비밀번호
+    INFLUXDB_URL      : InfluxDB URL (예: http://influxdb:8086)
+    INFLUXDB_TOKEN    : InfluxDB 인증 토큰
+    INFLUXDB_ORG      : InfluxDB 조직명 (예: homelab)
+    INFLUXDB_BUCKET   : InfluxDB 버킷명 (예: network-metrics)
+
+line protocol 형식 (InfluxDB write 페이로드):
     aci_fault,severity=critical count=3i 1700000000000000000
     aci_fault,severity=major count=1i 1700000000000000000
     aci_health score=98i 1700000000000000000
@@ -40,18 +54,19 @@ from typing import Any
 
 import requests
 import urllib3
+from influxdb_client import InfluxDBClient
+from influxdb_client.client.write_api import SYNCHRONOUS
 
 # =============================================================================
 # 로깅 설정
 #
-# - stdout: Telegraf 가 line protocol 파싱에 사용 (메트릭 출력 전용)
-# - stderr: 로그 메시지 출력 (Telegraf 가 파싱하지 않음)
-# - 로그 레벨: INFO (운영), DEBUG (디버깅 시 변경)
+# v0.2.0: stdout 은 더 이상 메트릭 출력에 사용하지 않으므로
+#         로그를 stdout 으로 변경 (컨테이너 로그에서 확인 가능)
 # =============================================================================
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    stream=sys.stderr,  # 로그는 반드시 stderr 로 출력 (stdout 은 메트릭 전용)
+    stream=sys.stdout,
 )
 logger = logging.getLogger("aci_collector")
 
@@ -60,7 +75,6 @@ logger = logging.getLogger("aci_collector")
 #
 # APIC 는 기본적으로 자체 서명 인증서를 사용하므로
 # verify=False 설정 시 urllib3 의 InsecureRequestWarning 이 반복 출력됨
-# stderr 로그를 오염시키지 않도록 경고 억제
 # =============================================================================
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -69,9 +83,12 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 # 상수 정의
 # =============================================================================
 
+# 수집 루프 주기 (초)
+# v0.2.0: Telegraf exec interval 대신 이 스크립트가 직접 루프 관리
+COLLECT_INTERVAL: int = 60
+
 # APIC 인증 토큰 갱신 주기 (초)
 # APIC 기본 토큰 만료 시간은 600초 (10분)
-# 수집 주기(60s) 기준으로 5분마다 갱신
 TOKEN_REFRESH_INTERVAL: int = 300
 
 # APIC REST API 타임아웃 (초)
@@ -129,7 +146,7 @@ class ApicClient:
         """
         APIC 인증 토큰 발급
 
-        POST /api/aaaLogin.json 으로 토큰을 발급받아 세션 헤더에 설정
+        POST /api/aaaLogin.json 으로 토큰을 발급받아 세션 쿠키에 설정
 
         Raises:
             requests.RequestException: 인증 요청 실패 시
@@ -356,68 +373,170 @@ def collect_nodes(client: ApicClient) -> list[str]:
     return lines
 
 
-def main() -> None:
+def write_to_influxdb(
+    lines: list[str],
+    influxdb_url: str,
+    influxdb_token: str,
+    influxdb_org: str,
+    influxdb_bucket: str,
+) -> None:
     """
-    메인 실행 함수
+    수집된 메트릭을 InfluxDB 에 write
 
-    환경변수에서 APIC 접속 정보를 읽어 메트릭을 수집하고
-    line protocol 형식으로 stdout 에 출력
+    influxdb_client 라이브러리의 write_api 를 통해
+    line protocol 문자열 목록을 InfluxDB HTTP API 로 전송
+
+    Args:
+        lines          : line protocol 라인 목록
+        influxdb_url   : InfluxDB URL (예: http://influxdb:8086)
+        influxdb_token : InfluxDB 인증 토큰
+        influxdb_org   : InfluxDB 조직명
+        influxdb_bucket: InfluxDB 버킷명
 
     Raises:
-        SystemExit: 환경변수 누락 또는 수집 실패 시 exit code 1 로 종료
+        Exception: InfluxDB write 실패 시
     """
-    # -------------------------------------------------------------------------
-    # 환경변수 로드
-    #
-    # docker compose 환경에서는 environment 블록으로 주입
-    # 로컬 개발 환경에서는 python-dotenv 로 .env 파일에서 로드 가능
-    # -------------------------------------------------------------------------
+    # InfluxDBClient 는 컨텍스트 매니저로 사용하여 연결 자원을 명시적으로 해제
+    with InfluxDBClient(
+        url=influxdb_url,
+        token=influxdb_token,
+        org=influxdb_org,
+    ) as influx_client:
+        # SYNCHRONOUS: write 완료를 동기적으로 확인 (에러 즉시 감지)
+        write_api = influx_client.write_api(write_options=SYNCHRONOUS)
+        write_api.write(
+            bucket=influxdb_bucket,
+            org=influxdb_org,
+            record=lines,   # list[str] 직접 전달 가능 (line protocol 자동 인식)
+        )
+
+    logger.info(
+        "InfluxDB write 완료 — bucket=%s, lines=%d", influxdb_bucket, len(lines)
+    )
+
+
+def load_env() -> tuple[str, str, str, str, str, str, str]:
+    """
+    필수 환경변수 로드 및 누락 검사
+
+    Returns:
+        tuple: (apic_url, apic_username, apic_password,
+                influxdb_url, influxdb_token, influxdb_org, influxdb_bucket)
+
+    Raises:
+        SystemExit: 필수 환경변수 누락 시 exit code 1 로 종료
+    """
     apic_url: str = os.environ.get("APIC_URL", "")
     apic_username: str = os.environ.get("APIC_USERNAME", "")
     apic_password: str = os.environ.get("APIC_PASSWORD", "")
+    influxdb_url: str = os.environ.get("INFLUXDB_URL", "")
+    influxdb_token: str = os.environ.get("INFLUXDB_TOKEN", "")
+    influxdb_org: str = os.environ.get("INFLUXDB_ORG", "")
+    influxdb_bucket: str = os.environ.get("INFLUXDB_BUCKET", "")
 
-    # 필수 환경변수 누락 검사
     missing: list[str] = []
-    if not apic_url:
-        missing.append("APIC_URL")
-    if not apic_username:
-        missing.append("APIC_USERNAME")
-    if not apic_password:
-        missing.append("APIC_PASSWORD")
+    for name, value in [
+        ("APIC_URL", apic_url),
+        ("APIC_USERNAME", apic_username),
+        ("APIC_PASSWORD", apic_password),
+        ("INFLUXDB_URL", influxdb_url),
+        ("INFLUXDB_TOKEN", influxdb_token),
+        ("INFLUXDB_ORG", influxdb_org),
+        ("INFLUXDB_BUCKET", influxdb_bucket),
+    ]:
+        if not value:
+            missing.append(name)
 
     if missing:
         logger.error("필수 환경변수 누락: %s", ", ".join(missing))
         sys.exit(1)
 
+    return (
+        apic_url,
+        apic_username,
+        apic_password,
+        influxdb_url,
+        influxdb_token,
+        influxdb_org,
+        influxdb_bucket,
+    )
+
+
+def main() -> None:
+    """
+    메인 실행 함수
+
+    환경변수에서 접속 정보를 읽어 COLLECT_INTERVAL 주기로 메트릭을 수집하고
+    InfluxDB 에 직접 write 하는 루프를 실행
+
+    v0.2.0 변경:
+        - 단발 실행 → while True 루프 (COLLECT_INTERVAL 주기)
+        - stdout line protocol 출력 → InfluxDB 직접 write
+        - 수집/write 실패 시 루프 중단 없이 다음 주기에 재시도
+
+    Raises:
+        SystemExit: 환경변수 누락 시 exit code 1 로 종료
+    """
+    (
+        apic_url,
+        apic_username,
+        apic_password,
+        influxdb_url,
+        influxdb_token,
+        influxdb_org,
+        influxdb_bucket,
+    ) = load_env()
+
+    apic_client: ApicClient = ApicClient(apic_url, apic_username, apic_password)
+
+    logger.info(
+        "aci-collector 시작 — APIC=%s, InfluxDB=%s, org=%s, bucket=%s, interval=%ds",
+        apic_url,
+        influxdb_url,
+        influxdb_org,
+        influxdb_bucket,
+        COLLECT_INTERVAL,
+    )
+
     # -------------------------------------------------------------------------
-    # 메트릭 수집 및 출력
-    # -------------------------------------------------------------------------
-    client: ApicClient = ApicClient(apic_url, apic_username, apic_password)
-
-    all_lines: list[str] = []
-
-    try:
-        all_lines.extend(collect_faults(client))
-        all_lines.extend(collect_fabric_health(client))
-        all_lines.extend(collect_nodes(client))
-
-    except requests.RequestException as e:
-        logger.error("APIC API 요청 실패: %s", e)
-        sys.exit(1)
-    except (KeyError, IndexError, ValueError) as e:
-        logger.error("응답 데이터 파싱 실패: %s", e)
-        sys.exit(1)
-
-    # -------------------------------------------------------------------------
-    # stdout 으로 line protocol 출력
+    # 수집 루프
     #
-    # Telegraf exec 플러그인이 stdout 을 파싱하여 InfluxDB 로 전송
-    # 반드시 stdout 으로만 출력 (로그는 stderr)
+    # 수집 또는 write 실패 시 에러 로그 후 다음 주기에 재시도
+    # 환경변수 누락 등 복구 불가능한 오류는 load_env() 에서 이미 종료
     # -------------------------------------------------------------------------
-    for line in all_lines:
-        print(line)  # noqa: T201 — Telegraf line protocol 출력 전용
+    while True:
+        loop_start: float = time.time()
 
-    logger.info("전체 메트릭 출력 완료 (총 %d 라인)", len(all_lines))
+        try:
+            all_lines: list[str] = []
+            all_lines.extend(collect_faults(apic_client))
+            all_lines.extend(collect_fabric_health(apic_client))
+            all_lines.extend(collect_nodes(apic_client))
+
+            write_to_influxdb(
+                all_lines,
+                influxdb_url,
+                influxdb_token,
+                influxdb_org,
+                influxdb_bucket,
+            )
+
+            logger.info("수집 주기 완료 (총 %d 라인)", len(all_lines))
+
+        except requests.RequestException as e:
+            logger.error("APIC API 요청 실패: %s", e)
+
+        except (KeyError, IndexError, ValueError) as e:
+            logger.error("응답 데이터 파싱 실패: %s", e)
+
+        except Exception as e:  # noqa: BLE001 — InfluxDB write 실패 등 예상치 못한 오류
+            logger.error("수집 주기 처리 중 예외 발생: %s", e)
+
+        # 루프 처리 시간을 고려하여 잔여 sleep 시간 계산
+        elapsed: float = time.time() - loop_start
+        sleep_time: float = max(0.0, COLLECT_INTERVAL - elapsed)
+        logger.debug("다음 수집까지 %.1f 초 대기", sleep_time)
+        time.sleep(sleep_time)
 
 
 if __name__ == "__main__":

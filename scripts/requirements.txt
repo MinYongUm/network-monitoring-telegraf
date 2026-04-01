@@ -14,6 +14,10 @@
 # 버전 고정 원칙:
 #   - 운영 안정성을 위해 주요 패키지는 버전 고정 (==)
 #   - 보안 패치 적용 시 버전 업데이트 후 동작 검증 필요
+#
+# 변경 이력:
+#   v0.1.x: 초기 작성 (requests, urllib3, certifi, python-dotenv, flask, gunicorn)
+#   v0.2.0: influxdb-client 추가 (aci-collector InfluxDB 직접 write 방식 전환)
 # =============================================================================
 
 
@@ -51,6 +55,21 @@ certifi==2024.2.2
 #   - docker compose 환경에서는 environment 로 주입되므로 선택적 사용
 # -----------------------------------------------------------------------------
 python-dotenv==1.0.1
+
+
+# -----------------------------------------------------------------------------
+# InfluxDB 클라이언트 (v0.2.0 추가)
+#
+# influxdb-client: aci_collector.py 에서 InfluxDB HTTP API 직접 write 에 사용
+#   - v0.1.x: Telegraf exec 플러그인 → stdout line protocol → Telegraf → InfluxDB
+#   - v0.2.0: aci-collector 루프 → InfluxDB 직접 write (C안 전환)
+#
+# 주요 사용:
+#   - InfluxDBClient            : 연결 및 세션 관리
+#   - write_api(SYNCHRONOUS)    : 동기 write (에러 즉시 감지)
+#   - record=list[str]          : line protocol 문자열 목록 직접 전달
+# -----------------------------------------------------------------------------
+influxdb-client==1.48.0
 
 
 # -----------------------------------------------------------------------------

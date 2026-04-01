@@ -61,8 +61,9 @@ services:
   # ---------------------------------------------------------------------------
   # Telegraf — 메트릭 수집 에이전트
   #
-  # - SNMP 플러그인: Cisco IOS, NX-OS, EVE-NG 서버 메트릭 수집
-  # - exec 플러그인: aci_collector.py 를 주기적으로 호출하여 ACI 메트릭 수집
+  # - SNMP 플러그인: Cisco IOS, NX-OS 메트릭 수집
+  # - prometheus 플러그인: EVE-NG 홈 서버 Node Exporter 메트릭 수집
+  # - ACI 수집은 aci-collector 서비스가 전담 (v0.2.0, C안 적용)
   # - InfluxDB healthcheck 통과 후 기동 (depends_on condition)
   # - telegraf.conf  : 글로벌 설정 및 InfluxDB 출력 설정
   # - inputs.d/      : 수집 대상별 입력 플러그인 설정 파일 (conf 분리 관리)
@@ -84,10 +85,6 @@ services:
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
       INFLUXDB_ORG: ${INFLUXDB_ORG}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-      # ACI APIC 접속 정보 — inputs.d/aci_rest.conf 의 exec 플러그인에서 참조
-      APIC_URL: ${APIC_URL}
-      APIC_USERNAME: ${APIC_USERNAME}
-      APIC_PASSWORD: ${APIC_PASSWORD}
       # SNMPv3 인증 정보 — inputs.d/snmp_*.conf 에서 참조
       SNMP_AUTH_USERNAME: ${SNMP_AUTH_USERNAME}
       SNMP_AUTH_PASSWORD: ${SNMP_AUTH_PASSWORD}
@@ -97,21 +94,24 @@ services:
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
       # 수집 대상별 입력 플러그인 설정 디렉토리 (읽기 전용 마운트)
       - ./telegraf/inputs.d:/etc/telegraf/telegraf.d:ro
-      # ACI 수집 스크립트 (exec 플러그인이 호출)
-      - ./scripts:/scripts:ro
     networks:
       - monitoring
 
   # ---------------------------------------------------------------------------
-  # aci-collector — ACI 메트릭 수집용 Python 컨테이너
+  # aci-collector — ACI 메트릭 수집 전용 Python 컨테이너 (v0.2.0, C안)
   #
-  # - Telegraf exec 플러그인이 이 컨테이너 안의 aci_collector.py 를 호출
-  # - python:3.11-slim 이미지 사용 (telegraf 이미지에 Python 미포함)
-  # - 기동 시 requirements.txt 자동 설치 후 대기 상태 유지
+  # C안 채택 배경:
+  #   A안 (telegraf 에 python3 추가): 최소 권한 원칙 위반, 불필요한 패키지 증가
+  #   B안 (Flask HTTP 서버): 불필요한 포트 노출, 구조 복잡
+  #   C안 (InfluxDB 직접 write): 크리덴셜 격리, 공격 표면 최소화
   #
-  # Stage 2 (사내망 실배포) 전환 시:
-  #   telegraf/Dockerfile 로 Telegraf 이미지에 Python 통합하여
-  #   이 컨테이너 제거 예정 (telegraf/Dockerfile 주석 참고)
+  # 크리덴셜 격리:
+  #   - APIC 크리덴셜: 이 서비스에만 존재 (telegraf 서비스와 분리)
+  #   - SNMP 크리덴셜: telegraf 서비스에만 존재 (이 서비스와 분리)
+  #
+  # 실행 흐름:
+  #   기동 시 requirements.txt 설치 → aci_collector.py 루프 실행
+  #   aci_collector.py 가 COLLECT_INTERVAL(60s) 주기로 APIC 수집 후 InfluxDB write
   # ---------------------------------------------------------------------------
   aci-collector:
     image: python:3.11-slim
@@ -125,15 +125,20 @@ services:
       APIC_URL: ${APIC_URL}
       APIC_USERNAME: ${APIC_USERNAME}
       APIC_PASSWORD: ${APIC_PASSWORD}
+      # InfluxDB 연결 정보 — aci_collector.py 에서 직접 write 시 사용 (v0.2.0 추가)
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
     volumes:
       # 수집 스크립트 및 requirements.txt 마운트
       - ./scripts:/scripts:ro
     working_dir: /scripts
-    # pip install 완료 후 tail -f /dev/null 로 컨테이너 유지
-    # Telegraf exec 플러그인이 주기적으로 aci_collector.py 를 호출
+    # pip install 완료 후 aci_collector.py 루프 실행
+    # aci_collector.py 내부에서 COLLECT_INTERVAL(60s) 주기로 수집 및 InfluxDB write
     command: >
       sh -c "pip install --no-cache-dir -r requirements.txt -q &&
-             tail -f /dev/null"
+             python aci_collector.py"
     networks:
       - monitoring
 
