@@ -1,0 +1,374 @@
+{
+  "__comment": "=======================================================================",
+  "__comment_1": "network-monitoring-telegraf / grafana/dashboards/aci_fabric.json",
+  "__comment_2": "",
+  "__comment_3": "목적: Cisco ACI Fabric 메트릭 시각화 대시보드",
+  "__comment_4": "",
+  "__comment_5": "패널 구성:",
+  "__comment_6": "  Row 1 - 요약 (Stat 패널)",
+  "__comment_7": "    [1] Critical Fault 수",
+  "__comment_8": "    [2] Major Fault 수",
+  "__comment_9": "    [3] Fabric Health Score",
+  "__comment_10": "    [4] Node 총 수 / Up 수",
+  "__comment_11": "  Row 2 - 시계열",
+  "__comment_12": "    [5] Fault 추이 (severity 별 Time Series)",
+  "__comment_13": "    [6] Fabric Health Score 추이 (Time Series)",
+  "__comment_14": "  Row 3 - 상태 테이블",
+  "__comment_15": "    [7] Node 상태 목록 (Table)",
+  "__comment_16": "",
+  "__comment_17": "데이터소스: InfluxDB (Flux 쿼리)",
+  "__comment_18": "수집 measurement:",
+  "__comment_19": "  aci_fault  — tags: severity / fields: count",
+  "__comment_20": "  aci_health — fields: score",
+  "__comment_21": "  aci_node   — tags: node_id, role, pod_id / fields: state",
+  "__comment_22": "=======================================================================",
+  "id": null,
+  "uid": "aci-fabric-001",
+  "title": "ACI Fabric",
+  "description": "Cisco ACI Fabric 메트릭 — Fault, Health Score, Node 상태",
+  "tags": ["aci", "network", "telegraf"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m", "30m", "1h"]
+  },
+  "templating": {
+    "list": [
+      {
+        "__comment": "변수: 버킷명 — .env 의 INFLUXDB_BUCKET 과 일치",
+        "name": "bucket",
+        "type": "constant",
+        "label": "Bucket",
+        "query": "network-metrics",
+        "current": {
+          "value": "network-metrics",
+          "text": "network-metrics"
+        },
+        "hide": 2
+      }
+    ]
+  },
+  "panels": [
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p1": "패널 1 — Critical Fault 수 (Stat)",
+      "__comment_p1_1": "현재 시점 기준 critical severity Fault 총 개수",
+      "__comment_p1_2": "임계값: 0=green / 1이상=red (즉각 대응 필요)",
+      "__comment_p1_3": "-------------------------------------------------------------------",
+      "id": 1,
+      "type": "stat",
+      "title": "Critical Faults",
+      "description": "현재 ACI Fabric 의 Critical Fault 수. 0 이상이면 즉각 확인 필요.",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          },
+          "mappings": []
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Critical Fault 수 조회\n// aci_collector.py 가 수집한 aci_fault measurement 에서\n// severity=critical 태그를 가진 최신 count 값을 반환\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_fault\")\n  |> filter(fn: (r) => r.severity == \"critical\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p2": "패널 2 — Major Fault 수 (Stat)",
+      "__comment_p2_1": "현재 시점 기준 major severity Fault 총 개수",
+      "__comment_p2_2": "임계값: 0=green / 1~4=yellow / 5이상=orange",
+      "__comment_p2_3": "-------------------------------------------------------------------",
+      "id": 2,
+      "type": "stat",
+      "title": "Major Faults",
+      "description": "현재 ACI Fabric 의 Major Fault 수.",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 5 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Major Fault 수 조회\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_fault\")\n  |> filter(fn: (r) => r.severity == \"major\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p3": "패널 3 — Fabric Health Score (Gauge)",
+      "__comment_p3_1": "ACI Fabric 전체 Health Score (0~100)",
+      "__comment_p3_2": "임계값: 90이상=green / 70~89=yellow / 70미만=red",
+      "__comment_p3_3": "-------------------------------------------------------------------",
+      "id": 3,
+      "type": "gauge",
+      "title": "Fabric Health Score",
+      "description": "ACI Fabric 전체 Health Score. 100에 가까울수록 정상.",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green",  "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Fabric Health Score 조회\n// fabricHealthTotal 에서 수집한 score 필드의 최신값 반환\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_health\")\n  |> filter(fn: (r) => r._field == \"score\")\n  |> last()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p4": "패널 4 — Node Up/Down 현황 (Stat)",
+      "__comment_p4_1": "전체 노드 수 대비 Up(in-service) 노드 수",
+      "__comment_p4_2": "state=1: in-service / state=0: out-of-service",
+      "__comment_p4_3": "-------------------------------------------------------------------",
+      "id": 4,
+      "type": "stat",
+      "title": "Nodes Up",
+      "description": "현재 in-service 상태인 ACI Node 수 (state=1 기준).",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",   "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// in-service 상태 노드 수 집계\n// state=1 인 노드만 필터링 후 count\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> filter(fn: (r) => r._value == 1)\n  |> last()\n  |> count()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p5": "패널 5 — Fault 추이 (Time Series)",
+      "__comment_p5_1": "severity 별 Fault 수 시계열 그래프",
+      "__comment_p5_2": "critical=red / major=orange / minor=yellow / warning=blue",
+      "__comment_p5_3": "-------------------------------------------------------------------",
+      "id": 5,
+      "type": "timeseries",
+      "title": "Fault 추이 (severity 별)",
+      "description": "시간에 따른 severity 별 Fault 수 변화.",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "critical" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red",    "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "major" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "minor" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "warning" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",   "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Fault 수 시계열 — severity 별로 피벗하여 각 컬럼으로 표시\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aci_fault\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> pivot(\n       rowKey: [\"_time\"],\n       columnKey: [\"severity\"],\n       valueColumn: \"_value\"\n     )"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p6": "패널 6 — Fabric Health Score 추이 (Time Series)",
+      "__comment_p6_1": "시간에 따른 Fabric Health Score 변화",
+      "__comment_p6_2": "임계선: 90 (yellow), 70 (red) 표시",
+      "__comment_p6_3": "-------------------------------------------------------------------",
+      "id": 6,
+      "type": "timeseries",
+      "title": "Fabric Health Score 추이",
+      "description": "시간에 따른 ACI Fabric Health Score 변화. 하락 추세 시 원인 분석 필요.",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15
+          },
+          "color": { "fixedColor": "green", "mode": "fixed" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "green",  "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "single" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Fabric Health Score 시계열\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aci_health\")\n  |> filter(fn: (r) => r._field == \"score\")"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p7": "패널 7 — Node 상태 목록 (Table)",
+      "__comment_p7_1": "전체 ACI Node 목록과 현재 상태 표시",
+      "__comment_p7_2": "컬럼: node_id / role / pod_id / state",
+      "__comment_p7_3": "state 값 매핑: 1=in-service(green) / 0=out-of-service(red) / -1=unknown(gray)",
+      "__comment_p7_4": "-------------------------------------------------------------------",
+      "id": 7,
+      "type": "table",
+      "title": "Node 상태 목록",
+      "description": "ACI Fabric 내 전체 Node(APIC/Leaf/Spine) 의 현재 운영 상태.",
+      "gridPos": { "x": 0, "y": 12, "w": 24, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "auto" } },
+        "overrides": [
+          {
+            "__comment": "state 필드에 색상 매핑 적용",
+            "matcher": { "id": "byName", "options": "state" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "1":  { "text": "in-service",     "color": "green" } } },
+                  { "type": "value", "options": { "0":  { "text": "out-of-service", "color": "red"   } } },
+                  { "type": "value", "options": { "-1": { "text": "unknown",         "color": "gray"  } } }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [{ "displayName": "state", "desc": false }],
+        "footer": { "show": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Node 상태 목록 — 최신 데이터 기준\n// node_id, role, pod_id 태그와 state 필드를 함께 표시\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> last()\n  |> keep(columns: [\"node_id\", \"role\", \"pod_id\", \"_value\"])\n  |> rename(columns: {\"_value\": \"state\"})"
+        }
+      ]
+    }
+
+  ],
+
+  "annotations": {
+    "list": [
+      {
+        "__comment": "기본 어노테이션 — Grafana 내장 어노테이션 (비활성화)",
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": false,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

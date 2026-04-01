@@ -1,0 +1,497 @@
+{
+  "__comment": "=======================================================================",
+  "__comment_1": "network-monitoring-telegraf / grafana/dashboards/snmp_traffic.json",
+  "__comment_2": "",
+  "__comment_3": "목적: Cisco IOS / NX-OS 인터페이스 트래픽 메트릭 시각화 대시보드",
+  "__comment_4": "",
+  "__comment_5": "패널 구성:",
+  "__comment_6": "  Row 1 - 요약 (Stat 패널)",
+  "__comment_7": "    [1] 전체 인터페이스 수",
+  "__comment_8": "    [2] Up 인터페이스 수",
+  "__comment_9": "    [3] Down 인터페이스 수",
+  "__comment_10": "    [4] 에러 발생 인터페이스 수",
+  "__comment_11": "  Row 2 - 트래픽 시계열",
+  "__comment_12": "    [5] 인터페이스별 수신 BPS (Time Series)",
+  "__comment_13": "    [6] 인터페이스별 송신 BPS (Time Series)",
+  "__comment_14": "  Row 3 - 에러/드롭",
+  "__comment_15": "    [7] 인터페이스별 에러 카운터 (Time Series)",
+  "__comment_16": "    [8] 인터페이스별 드롭 카운터 (Time Series)",
+  "__comment_17": "  Row 4 - 상태 테이블",
+  "__comment_18": "    [9] 인터페이스 상태 목록 (Table)",
+  "__comment_19": "",
+  "__comment_20": "데이터소스: InfluxDB (Flux 쿼리)",
+  "__comment_21": "수집 measurement:",
+  "__comment_22": "  cisco_ios_interface  — tags: hostname, ifName, ifAlias",
+  "__comment_23": "                         fields: ifOperStatus, ifHCInOctets,",
+  "__comment_24": "                                 ifHCOutOctets, ifHCInUcastPkts,",
+  "__comment_25": "                                 ifHCOutUcastPkts, ifInErrors,",
+  "__comment_26": "                                 ifOutErrors, ifInDiscards, ifOutDiscards",
+  "__comment_27": "  cisco_nxos_interface — 위와 동일한 필드 구조",
+  "__comment_28": "",
+  "__comment_29": "BPS 계산:",
+  "__comment_30": "  ifHCInOctets/ifHCOutOctets 는 누적 카운터",
+  "__comment_31": "  Flux derivative() 함수로 초당 변화량(bytes/s) 계산 후 *8 로 bps 변환",
+  "__comment_32": "=======================================================================",
+  "id": null,
+  "uid": "snmp-traffic-001",
+  "title": "SNMP Traffic",
+  "description": "Cisco IOS / NX-OS 인터페이스 트래픽, 에러, 링크 상태",
+  "tags": ["snmp", "interface", "traffic", "telegraf"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["30s", "1m", "5m", "15m", "30m", "1h"]
+  },
+  "templating": {
+    "list": [
+      {
+        "__comment": "변수 1 — 버킷명 (숨김 상수)",
+        "name": "bucket",
+        "type": "constant",
+        "label": "Bucket",
+        "query": "network-metrics",
+        "current": {
+          "value": "network-metrics",
+          "text": "network-metrics"
+        },
+        "hide": 2
+      },
+      {
+        "__comment": "변수 2 — 장비 소스 선택 (cisco_ios / cisco_nxos / 전체)",
+        "__comment_1": "source 태그로 IOS 와 NX-OS 를 구분하여 필터링",
+        "name": "source",
+        "type": "custom",
+        "label": "Device Type",
+        "query": "cisco_ios,cisco_nxos",
+        "current": {
+          "value": ["$__all"],
+          "text": "All"
+        },
+        "includeAll": true,
+        "multi": true,
+        "hide": 0
+      },
+      {
+        "__comment": "변수 3 — 호스트명 선택",
+        "__comment_1": "InfluxDB 에서 hostname 태그 목록을 동적으로 조회",
+        "name": "hostname",
+        "type": "query",
+        "label": "Hostname",
+        "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n  bucket: \"network-metrics\",\n  tag: \"hostname\"\n)",
+        "current": {
+          "value": "$__all",
+          "text": "All"
+        },
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "hide": 0
+      },
+      {
+        "__comment": "변수 4 — 인터페이스명 선택",
+        "__comment_1": "선택된 hostname 에 따라 ifName 태그 목록을 동적으로 조회",
+        "name": "interface",
+        "type": "query",
+        "label": "Interface",
+        "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n  bucket: \"network-metrics\",\n  tag: \"ifName\"\n)",
+        "current": {
+          "value": "$__all",
+          "text": "All"
+        },
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p1": "패널 1 — 전체 인터페이스 수 (Stat)",
+      "__comment_p1_1": "현재 수집 중인 전체 인터페이스 수",
+      "__comment_p1_2": "-------------------------------------------------------------------",
+      "id": 1,
+      "type": "stat",
+      "title": "전체 인터페이스",
+      "description": "현재 수집 중인 전체 인터페이스 수.",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 전체 인터페이스 수 집계\n// IOS + NX-OS measurement 를 union 으로 합산\nunion(\n  tables: [\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> last(),\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_nxos_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> last()\n  ]\n)\n|> count()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p2": "패널 2 — Up 인터페이스 수 (Stat)",
+      "__comment_p2_1": "ifOperStatus = 1 (up) 인 인터페이스 수",
+      "__comment_p2_2": "-------------------------------------------------------------------",
+      "id": 2,
+      "type": "stat",
+      "title": "Up 인터페이스",
+      "description": "현재 ifOperStatus=1 (up) 상태인 인터페이스 수.",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "fixedColor": "green", "mode": "fixed" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Up 인터페이스 수 집계 (ifOperStatus=1)\nunion(\n  tables: [\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> filter(fn: (r) => r._value == 1)\n      |> last(),\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_nxos_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> filter(fn: (r) => r._value == 1)\n      |> last()\n  ]\n)\n|> count()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p3": "패널 3 — Down 인터페이스 수 (Stat)",
+      "__comment_p3_1": "ifOperStatus = 2 (down) 인 인터페이스 수",
+      "__comment_p3_2": "임계값: 0=green / 1이상=red",
+      "__comment_p3_3": "-------------------------------------------------------------------",
+      "id": 3,
+      "type": "stat",
+      "title": "Down 인터페이스",
+      "description": "현재 ifOperStatus=2 (down) 상태인 인터페이스 수. 0 이상이면 즉각 확인 필요.",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// Down 인터페이스 수 집계 (ifOperStatus=2)\nunion(\n  tables: [\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> filter(fn: (r) => r._value == 2)\n      |> last(),\n    from(bucket: v.bucket)\n      |> range(start: -5m)\n      |> filter(fn: (r) => r._measurement == \"cisco_nxos_interface\")\n      |> filter(fn: (r) => r._field == \"ifOperStatus\")\n      |> filter(fn: (r) => r._value == 2)\n      |> last()\n  ]\n)\n|> count()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p4": "패널 4 — 에러 발생 인터페이스 수 (Stat)",
+      "__comment_p4_1": "ifInErrors + ifOutErrors 합계가 0 초과인 인터페이스 수",
+      "__comment_p4_2": "임계값: 0=green / 1이상=orange",
+      "__comment_p4_3": "-------------------------------------------------------------------",
+      "id": 4,
+      "type": "stat",
+      "title": "에러 인터페이스",
+      "description": "에러 카운터(ifInErrors + ifOutErrors)가 증가 중인 인터페이스 수.",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 에러 발생 인터페이스 수\n// ifInErrors 또는 ifOutErrors 가 0 초과인 인터페이스 카운트\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInErrors\" or r._field == \"ifOutErrors\")\n  |> last()\n  |> filter(fn: (r) => r._value > 0)\n  |> group(columns: [\"ifName\", \"hostname\"])\n  |> count()"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p5": "패널 5 — 수신 트래픽 BPS (Time Series)",
+      "__comment_p5_1": "인터페이스별 수신 트래픽 (bits per second)",
+      "__comment_p5_2": "ifHCInOctets 누적 카운터에 derivative() 적용 후 *8 로 bps 변환",
+      "__comment_p5_3": "변수 필터: $hostname, $interface, $source",
+      "__comment_p5_4": "-------------------------------------------------------------------",
+      "id": 5,
+      "type": "timeseries",
+      "title": "수신 트래픽 (BPS)",
+      "description": "인터페이스별 수신 트래픽. ifHCInOctets 기반 bits/s 변환값.",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "min": 0
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 수신 BPS 계산\n// derivative(): 누적 카운터의 초당 변화량(bytes/s) 계산\n// *8: bytes -> bits 변환\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifHCInOctets\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _value: r._value * 8.0 }))\n  |> group(columns: [\"hostname\", \"ifName\", \"ifAlias\"])"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p6": "패널 6 — 송신 트래픽 BPS (Time Series)",
+      "__comment_p6_1": "인터페이스별 송신 트래픽 (bits per second)",
+      "__comment_p6_2": "ifHCOutOctets 누적 카운터에 derivative() 적용 후 *8 로 bps 변환",
+      "__comment_p6_3": "-------------------------------------------------------------------",
+      "id": 6,
+      "type": "timeseries",
+      "title": "송신 트래픽 (BPS)",
+      "description": "인터페이스별 송신 트래픽. ifHCOutOctets 기반 bits/s 변환값.",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": false
+          },
+          "min": 0
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 송신 BPS 계산\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifHCOutOctets\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _value: r._value * 8.0 }))\n  |> group(columns: [\"hostname\", \"ifName\", \"ifAlias\"])"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p7": "패널 7 — 에러 카운터 (Time Series)",
+      "__comment_p7_1": "인터페이스별 수신/송신 에러 카운터 증가율",
+      "__comment_p7_2": "derivative() 로 초당 에러 증가율 계산",
+      "__comment_p7_3": "0 초과 시 물리 계층 문제(케이블, 광모듈 등) 의심",
+      "__comment_p7_4": "-------------------------------------------------------------------",
+      "id": 7,
+      "type": "timeseries",
+      "title": "에러 카운터 증가율",
+      "description": "인터페이스별 에러 카운터 초당 증가율. 0 초과 지속 시 물리 계층 확인 필요.",
+      "gridPos": { "x": 0, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 수신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifInErrors_rate\" }))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 송신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifOutErrors_rate\" }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p8": "패널 8 — 드롭 카운터 (Time Series)",
+      "__comment_p8_1": "인터페이스별 수신/송신 드롭 카운터 증가율",
+      "__comment_p8_2": "0 초과 시 버퍼 부족 또는 QoS 정책에 의한 폐기 의심",
+      "__comment_p8_3": "-------------------------------------------------------------------",
+      "id": 8,
+      "type": "timeseries",
+      "title": "드롭 카운터 증가율",
+      "description": "인터페이스별 드롭 카운터 초당 증가율. 지속 발생 시 버퍼/QoS 확인 필요.",
+      "gridPos": { "x": 12, "y": 12, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 수신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifInDiscards_rate\" }))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 송신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifOutDiscards_rate\" }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p9": "패널 9 — 인터페이스 상태 목록 (Table)",
+      "__comment_p9_1": "전체 인터페이스 현황 테이블",
+      "__comment_p9_2": "컬럼: hostname / ifName / ifAlias / ifOperStatus / 수신BPS / 송신BPS",
+      "__comment_p9_3": "ifOperStatus 색상 매핑: 1=up(green) / 2=down(red) / 3=testing(yellow)",
+      "__comment_p9_4": "-------------------------------------------------------------------",
+      "id": 9,
+      "type": "table",
+      "title": "인터페이스 상태 목록",
+      "description": "전체 인터페이스의 링크 상태 및 현재 트래픽 요약.",
+      "gridPos": { "x": 0, "y": 20, "w": 24, "h": 10 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "align": "auto" }
+        },
+        "overrides": [
+          {
+            "__comment": "ifOperStatus 색상 매핑",
+            "matcher": { "id": "byName", "options": "ifOperStatus" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "1": { "text": "up",      "color": "green"  } } },
+                  { "type": "value", "options": { "2": { "text": "down",    "color": "red"    } } },
+                  { "type": "value", "options": { "3": { "text": "testing", "color": "yellow" } } }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "__comment": "수신/송신 BPS 단위 설정",
+            "matcher": { "id": "byRegexp", "options": ".*BPS.*" },
+            "properties": [
+              { "id": "unit", "value": "bps" }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "sortBy": [{ "displayName": "ifOperStatus", "desc": false }],
+        "footer": { "show": false }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 인터페이스 상태 테이블\n// ifOperStatus 최신값과 현재 BPS 를 join 하여 표시\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOperStatus\")\n  |> last()\n  |> keep(columns: [\"hostname\", \"ifName\", \"ifAlias\", \"source\", \"_value\"])\n  |> rename(columns: {\"_value\": \"ifOperStatus\"})"
+        }
+      ]
+    }
+
+  ],
+
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": false,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

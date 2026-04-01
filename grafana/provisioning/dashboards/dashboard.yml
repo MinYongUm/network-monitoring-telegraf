@@ -1,0 +1,59 @@
+# =============================================================================
+# network-monitoring-telegraf / grafana/provisioning/dashboards/dashboard.yml
+#
+# 목적: Grafana 시작 시 대시보드 JSON 파일을 자동으로 로드하는 프로바이더 설정
+#
+# 동작 방식:
+#   Grafana 기동 시 이 파일을 읽어 지정된 경로의 JSON 파일을 대시보드로 등록
+#   grafana/dashboards/ 디렉토리의 JSON 파일이 자동으로 Grafana 에 반영됨
+#
+# 대시보드 파일 목록:
+#   grafana/dashboards/aci_fabric.json    — ACI Fabric 대시보드
+#   grafana/dashboards/snmp_traffic.json  — 인터페이스 트래픽 대시보드
+#   grafana/dashboards/homelab.json       — EVE-NG 홈 서버 시스템 대시보드
+#
+# 참조 문서:
+#   https://grafana.com/docs/grafana/latest/administration/provisioning/#dashboards
+# =============================================================================
+
+apiVersion: 1
+
+# -----------------------------------------------------------------------------
+# providers
+#
+# 대시보드 프로바이더 목록
+# 여러 프로바이더를 등록하여 다른 경로의 JSON 파일을 각각 관리 가능
+# -----------------------------------------------------------------------------
+providers:
+  - # 프로바이더 이름 — Grafana 내부에서 구분하는 식별자
+    name: "network-monitoring"
+
+    # 조직 ID (Grafana 기본 조직: 1)
+    orgId: 1
+
+    # 대시보드 파일 타입 — file: 로컬 파일 시스템에서 로드
+    type: file
+
+    # 프로비저닝된 대시보드를 Grafana Web UI 에서 수정 불가
+    # 대시보드 변경이 필요한 경우 JSON 파일을 직접 수정 후 Grafana 재시작
+    # 개발 중에는 true 로 설정하여 Web UI 에서 편집 후 JSON 을 내보내어
+    # 파일에 반영하는 워크플로우 권장
+    disableDeletion: false
+
+    # 대시보드 자동 갱신 주기 (초)
+    # 이 주기마다 JSON 파일 변경 여부를 확인하고 변경 시 자동 반영
+    updateIntervalSeconds: 30
+
+    # Web UI 에서 편집 허용 여부
+    # false: JSON 파일이 원본이며 Web UI 편집 내용은 재시작 시 초기화
+    # true : Web UI 에서 편집 가능 (개발/테스트 단계에서 활용)
+    allowUiUpdates: true
+
+    options:
+      # 대시보드 JSON 파일이 위치한 경로
+      # docker-compose.yml 에서 ./grafana/dashboards 를
+      # /var/lib/grafana/dashboards 로 마운트
+      path: /var/lib/grafana/dashboards
+
+      # 하위 디렉토리의 JSON 파일도 재귀적으로 로드
+      foldersFromFilesStructure: false

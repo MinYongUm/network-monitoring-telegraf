@@ -1,0 +1,550 @@
+{
+  "__comment": "=======================================================================",
+  "__comment_1": "network-monitoring-telegraf / grafana/dashboards/homelab.json",
+  "__comment_2": "",
+  "__comment_3": "목적: EVE-NG 홈 서버(192.168.0.200) 시스템 메트릭 시각화 대시보드",
+  "__comment_4": "",
+  "__comment_5": "패널 구성:",
+  "__comment_6": "  Row 1 - 요약 (Stat / Gauge 패널)",
+  "__comment_7": "    [1] CPU 사용률 (Gauge)",
+  "__comment_8": "    [2] 메모리 사용률 (Gauge)",
+  "__comment_9": "    [3] 디스크 사용률 / (Gauge)",
+  "__comment_10": "    [4] 시스템 업타임 (Stat)",
+  "__comment_11": "  Row 2 - CPU",
+  "__comment_12": "    [5] CPU 사용률 추이 (Time Series, 모드별: user/system/iowait)",
+  "__comment_13": "  Row 3 - 메모리",
+  "__comment_14": "    [6] 메모리 사용량 추이 (Time Series, used/available/cached)",
+  "__comment_15": "  Row 4 - 디스크",
+  "__comment_16": "    [7] 디스크 사용률 (Bar Gauge, 마운트 포인트별)",
+  "__comment_17": "    [8] 디스크 I/O (Time Series, read/write bytes/s)",
+  "__comment_18": "  Row 5 - 네트워크",
+  "__comment_19": "    [9] 네트워크 I/O (Time Series, 인터페이스별 수신/송신 BPS)",
+  "__comment_20": "    [10] 시스템 부하 평균 (Time Series, load1/5/15)",
+  "__comment_21": "",
+  "__comment_22": "데이터소스: InfluxDB (Flux 쿼리)",
+  "__comment_23": "수집 measurement (eve_ng_ 접두사):",
+  "__comment_24": "  eve_ng_node_cpu_seconds_total      — mode 태그: user/system/idle/iowait 등",
+  "__comment_25": "  eve_ng_node_memory_MemTotal_bytes   — 전체 메모리",
+  "__comment_26": "  eve_ng_node_memory_MemAvailable_bytes — 사용 가능 메모리",
+  "__comment_27": "  eve_ng_node_memory_Cached_bytes     — 캐시 메모리",
+  "__comment_28": "  eve_ng_node_filesystem_size_bytes   — 파일시스템 전체 크기",
+  "__comment_29": "  eve_ng_node_filesystem_avail_bytes  — 파일시스템 여유 공간",
+  "__comment_30": "  eve_ng_node_disk_read_bytes_total   — 디스크 읽기 누적",
+  "__comment_31": "  eve_ng_node_disk_written_bytes_total — 디스크 쓰기 누적",
+  "__comment_32": "  eve_ng_node_network_receive_bytes_total  — 네트워크 수신 누적",
+  "__comment_33": "  eve_ng_node_network_transmit_bytes_total — 네트워크 송신 누적",
+  "__comment_34": "  eve_ng_node_load1 / load5 / load15  — 부하 평균",
+  "__comment_35": "  eve_ng_node_boot_time_seconds       — 부팅 시각",
+  "__comment_36": "=======================================================================",
+  "id": null,
+  "uid": "homelab-001",
+  "title": "Homelab",
+  "description": "EVE-NG 홈 서버 시스템 메트릭 — CPU, 메모리, 디스크, 네트워크",
+  "tags": ["homelab", "node-exporter", "system", "telegraf"],
+  "timezone": "browser",
+  "schemaVersion": 38,
+  "version": 1,
+  "refresh": "2m",
+  "time": {
+    "from": "now-3h",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["1m", "2m", "5m", "15m", "30m", "1h"]
+  },
+  "templating": {
+    "list": [
+      {
+        "__comment": "변수 1 — 버킷명 (숨김 상수)",
+        "name": "bucket",
+        "type": "constant",
+        "label": "Bucket",
+        "query": "network-metrics",
+        "current": {
+          "value": "network-metrics",
+          "text": "network-metrics"
+        },
+        "hide": 2
+      },
+      {
+        "__comment": "변수 2 — 네트워크 인터페이스 선택",
+        "__comment_1": "loopback(lo) 등 불필요한 인터페이스 제외 가능",
+        "name": "interface",
+        "type": "query",
+        "label": "Network Interface",
+        "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n  bucket: \"network-metrics\",\n  tag: \"device\"\n)",
+        "current": {
+          "value": "$__all",
+          "text": "All"
+        },
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "hide": 0
+      },
+      {
+        "__comment": "변수 3 — 디스크 디바이스 선택",
+        "__comment_1": "sr0 등 CD-ROM 디바이스 제외 가능",
+        "name": "disk",
+        "type": "query",
+        "label": "Disk Device",
+        "datasource": { "type": "influxdb", "uid": "influxdb" },
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(\n  bucket: \"network-metrics\",\n  tag: \"device\"\n)",
+        "current": {
+          "value": "$__all",
+          "text": "All"
+        },
+        "includeAll": true,
+        "multi": true,
+        "refresh": 2,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p1": "패널 1 — CPU 사용률 (Gauge)",
+      "__comment_p1_1": "idle 모드를 제외한 CPU 사용률 계산",
+      "__comment_p1_2": "CPU 사용률 = 100 - idle%",
+      "__comment_p1_3": "임계값: 80이상=yellow / 90이상=red",
+      "__comment_p1_4": "-------------------------------------------------------------------",
+      "id": 1,
+      "type": "gauge",
+      "title": "CPU 사용률",
+      "description": "전체 CPU 사용률 (100 - idle%). 90% 이상 지속 시 원인 분석 필요.",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "red",    "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// CPU 사용률 계산\n// node_cpu_seconds_total 은 모드별 누적 초 단위 카운터\n// derivative() 로 초당 변화율 계산 후 idle 을 제외한 비율 산출\n//\n// 계산 순서:\n// 1. idle 모드 비율 계산\n// 2. 100 - idle% = 사용률\nidle = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_cpu_seconds_total\")\n  |> filter(fn: (r) => r.mode == \"idle\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> mean()\n  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))\n\ntotal = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_cpu_seconds_total\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> mean()\n  |> group()\n  |> sum()\n\njoin(\n  tables: {idle: idle, total: total},\n  on: [\"_time\"]\n)\n|> map(fn: (r) => ({ r with _value: 100.0 - (r._value_idle / r._value_total * 100.0) }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p2": "패널 2 — 메모리 사용률 (Gauge)",
+      "__comment_p2_1": "사용률 = (MemTotal - MemAvailable) / MemTotal * 100",
+      "__comment_p2_2": "MemAvailable 은 실제 사용 가능한 메모리 (캐시 회수 포함)",
+      "__comment_p2_3": "임계값: 80이상=yellow / 90이상=red",
+      "__comment_p2_4": "-------------------------------------------------------------------",
+      "id": 2,
+      "type": "gauge",
+      "title": "메모리 사용률",
+      "description": "(MemTotal - MemAvailable) / MemTotal * 100. 90% 이상 지속 시 확인 필요.",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 80 },
+              { "color": "red",    "value": 90 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 메모리 사용률 계산\n// (MemTotal - MemAvailable) / MemTotal * 100\ntotal = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_memory_MemTotal_bytes\")\n  |> last()\n\navail = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_memory_MemAvailable_bytes\")\n  |> last()\n\njoin(tables: {total: total, avail: avail}, on: [\"_time\"])\n|> map(fn: (r) => ({ r with _value: (r._value_total - r._value_avail) / r._value_total * 100.0 }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p3": "패널 3 — 루트 디스크 사용률 (Gauge)",
+      "__comment_p3_1": "/ 마운트 포인트 기준 디스크 사용률",
+      "__comment_p3_2": "사용률 = (size - avail) / size * 100",
+      "__comment_p3_3": "임계값: 70이상=yellow / 85이상=red",
+      "__comment_p3_4": "-------------------------------------------------------------------",
+      "id": 3,
+      "type": "gauge",
+      "title": "디스크 사용률 (/)",
+      "description": "루트(/) 파일시스템 사용률. 85% 이상 시 용량 확보 필요.",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red",    "value": 85 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "showThresholdLabels": true,
+        "showThresholdMarkers": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 루트 파일시스템 사용률\n// mountpoint=\"/\" 태그로 루트 파티션만 필터링\nsize = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_filesystem_size_bytes\")\n  |> filter(fn: (r) => r.mountpoint == \"/\")\n  |> last()\n\navail = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_filesystem_avail_bytes\")\n  |> filter(fn: (r) => r.mountpoint == \"/\")\n  |> last()\n\njoin(tables: {size: size, avail: avail}, on: [\"_time\", \"mountpoint\"])\n|> map(fn: (r) => ({ r with _value: (r._value_size - r._value_avail) / r._value_size * 100.0 }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p4": "패널 4 — 시스템 업타임 (Stat)",
+      "__comment_p4_1": "node_boot_time_seconds 와 현재 시각의 차이로 업타임 계산",
+      "__comment_p4_2": "-------------------------------------------------------------------",
+      "id": 4,
+      "type": "stat",
+      "title": "업타임",
+      "description": "EVE-NG 서버 마지막 부팅 이후 경과 시간.",
+      "gridPos": { "x": 18, "y": 0, "w": 6, "h": 6 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "color": { "fixedColor": "blue", "mode": "fixed" }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "colorMode": "value",
+        "graphMode": "none"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 업타임 계산\n// 현재 Unix 타임스탬프(초) - boot_time(초) = 업타임(초)\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_boot_time_seconds\")\n  |> last()\n  |> map(fn: (r) => ({\n       r with\n       _value: float(v: uint(v: now())) / 1000000000.0 - r._value\n     }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p5": "패널 5 — CPU 사용률 추이 (Time Series, 모드별)",
+      "__comment_p5_1": "user / system / iowait / softirq 모드별 CPU 사용률 시계열",
+      "__comment_p5_2": "iowait 높을 경우 디스크 I/O 병목 의심",
+      "__comment_p5_3": "-------------------------------------------------------------------",
+      "id": 5,
+      "type": "timeseries",
+      "title": "CPU 사용률 추이 (모드별)",
+      "description": "CPU 모드별 사용률 시계열. iowait 상승 시 디스크 I/O 병목 확인.",
+      "gridPos": { "x": 0, "y": 6, "w": 24, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "spanNulls": false
+          }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "user" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",   "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "system" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red",    "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "iowait" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "softirq" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// CPU 모드별 사용률 시계열\n// idle 제외 주요 모드(user/system/iowait/softirq)만 표시\n// derivative() 로 초당 변화율 계산 후 비율(%) 변환\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_cpu_seconds_total\")\n  |> filter(fn: (r) => r.mode == \"user\" or r.mode == \"system\" or r.mode == \"iowait\" or r.mode == \"softirq\")\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _value: r._value * 100.0 }))\n  |> group(columns: [\"mode\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean)\n  |> pivot(\n       rowKey: [\"_time\"],\n       columnKey: [\"mode\"],\n       valueColumn: \"_value\"\n     )"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p6": "패널 6 — 메모리 사용량 추이 (Time Series)",
+      "__comment_p6_1": "used / available / cached 메모리 사용량 시계열",
+      "__comment_p6_2": "used = MemTotal - MemAvailable",
+      "__comment_p6_3": "-------------------------------------------------------------------",
+      "id": 6,
+      "type": "timeseries",
+      "title": "메모리 사용량 추이",
+      "description": "메모리 사용량 시계열. used/available/cached 구분 표시.",
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bytes",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "spanNulls": false
+          },
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "used" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red",   "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "available" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "cached" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",  "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 메모리 사용량 시계열\n// used = MemTotal - MemAvailable\ntotal = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_memory_MemTotal_bytes\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n\navail = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_memory_MemAvailable_bytes\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n\ncached = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_memory_Cached_bytes\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n  |> map(fn: (r) => ({ r with _field: \"cached\" }))\n\nused = join(tables: {total: total, avail: avail}, on: [\"_time\"])\n  |> map(fn: (r) => ({ r with _value: r._value_total - r._value_avail, _field: \"used\" }))\n  |> keep(columns: [\"_time\", \"_value\", \"_field\"])\n\nunion(tables: [used, cached])"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p7": "패널 7 — 파일시스템별 사용률 (Bar Gauge)",
+      "__comment_p7_1": "마운트 포인트별 디스크 사용률 막대 그래프",
+      "__comment_p7_2": "tmpfs 등 가상 파일시스템은 eve_ng.conf 의 namepass 필터로 제외",
+      "__comment_p7_3": "-------------------------------------------------------------------",
+      "id": 7,
+      "type": "bargauge",
+      "title": "파일시스템 사용률",
+      "description": "마운트 포인트별 디스크 사용률. 85% 이상 시 용량 확보 필요.",
+      "gridPos": { "x": 0, "y": 22, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 70 },
+              { "color": "red",    "value": 85 }
+            ]
+          }
+        }
+      },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 마운트 포인트별 사용률\nsize = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_filesystem_size_bytes\")\n  |> last()\n\navail = from(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_filesystem_avail_bytes\")\n  |> last()\n\njoin(tables: {size: size, avail: avail}, on: [\"_time\", \"mountpoint\", \"device\"])\n|> map(fn: (r) => ({\n     r with\n     _value: (r._value_size - r._value_avail) / r._value_size * 100.0,\n     _field: r.mountpoint\n   }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p8": "패널 8 — 디스크 I/O (Time Series)",
+      "__comment_p8_1": "디스크별 읽기/쓰기 처리량 (bytes/s)",
+      "__comment_p8_2": "누적 카운터에 derivative() 적용하여 초당 처리량 계산",
+      "__comment_p8_3": "-------------------------------------------------------------------",
+      "id": 8,
+      "type": "timeseries",
+      "title": "디스크 I/O",
+      "description": "디스크 디바이스별 읽기/쓰기 처리량 (bytes/s).",
+      "gridPos": { "x": 12, "y": 22, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*read.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byRegexp", "options": ".*write.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 디스크 읽기 처리량 (bytes/s)\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_disk_read_bytes_total\")\n  |> filter(fn: (r) => contains(value: r.device, set: ${disk:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: r.device + \"_read\" }))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 디스크 쓰기 처리량 (bytes/s)\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_disk_written_bytes_total\")\n  |> filter(fn: (r) => contains(value: r.device, set: ${disk:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: r.device + \"_write\" }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p9": "패널 9 — 네트워크 I/O (Time Series)",
+      "__comment_p9_1": "인터페이스별 수신/송신 트래픽 (BPS)",
+      "__comment_p9_2": "-------------------------------------------------------------------",
+      "id": 9,
+      "type": "timeseries",
+      "title": "네트워크 I/O (BPS)",
+      "description": "네트워크 인터페이스별 수신/송신 트래픽 (bits/s).",
+      "gridPos": { "x": 0, "y": 30, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 10
+          },
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byRegexp", "options": ".*rx.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
+          { "matcher": { "id": "byRegexp", "options": ".*tx.*" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",  "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 수신 BPS\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_network_receive_bytes_total\")\n  |> filter(fn: (r) => contains(value: r.device, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _value: r._value * 8.0, _field: r.device + \"_rx\" }))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 송신 BPS\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_network_transmit_bytes_total\")\n  |> filter(fn: (r) => contains(value: r.device, set: ${interface:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _value: r._value * 8.0, _field: r.device + \"_tx\" }))"
+        }
+      ]
+    },
+
+    {
+      "__comment": "-------------------------------------------------------------------",
+      "__comment_p10": "패널 10 — 시스템 부하 평균 (Time Series)",
+      "__comment_p10_1": "load1 / load5 / load15 시계열",
+      "__comment_p10_2": "CPU 코어 수를 초과하면 처리 대기 프로세스 존재 의미",
+      "__comment_p10_3": "-------------------------------------------------------------------",
+      "id": 10,
+      "type": "timeseries",
+      "title": "시스템 부하 평균",
+      "description": "1분/5분/15분 부하 평균. CPU 코어 수 초과 시 병목 확인 필요.",
+      "gridPos": { "x": 12, "y": 30, "w": 12, "h": 8 },
+      "datasource": { "type": "influxdb", "uid": "influxdb" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 5
+          },
+          "min": 0
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "load1" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "red",    "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "load5" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "load15" },
+            "properties": [{ "id": "color", "value": { "fixedColor": "blue",   "mode": "fixed" } }] }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "influxdb" },
+          "query": "// 부하 평균 시계열\n// load1 / load5 / load15 를 pivot 으로 컬럼 분리\nload1 = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_load1\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n  |> map(fn: (r) => ({ r with _field: \"load1\" }))\n\nload5 = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_load5\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n  |> map(fn: (r) => ({ r with _field: \"load5\" }))\n\nload15 = from(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"eve_ng_node_load15\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last)\n  |> map(fn: (r) => ({ r with _field: \"load15\" }))\n\nunion(tables: [load1, load5, load15])\n|> pivot(\n     rowKey: [\"_time\"],\n     columnKey: [\"_field\"],\n     valueColumn: \"_value\"\n   )"
+        }
+      ]
+    }
+
+  ],
+
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": { "type": "grafana", "uid": "-- Grafana --" },
+        "enable": false,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  }
+}

@@ -1,0 +1,189 @@
+# =============================================================================
+# network-monitoring-telegraf / docker-compose.yml
+#
+# 구성: TIG 스택 (Telegraf + InfluxDB + Grafana) + ACI 수집용 Python 컨테이너
+# 목적: Cisco ACI, IOS, NX-OS, EVE-NG 홈 서버 메트릭 수집 및 시각화
+#
+# 사용 방법:
+#   1. .env.example 을 복사하여 .env 파일 생성 후 값 입력
+#      cp .env.example .env
+#   2. 스택 기동
+#      docker compose up -d
+#   3. 스택 종료
+#      docker compose down
+#
+# 접속 정보:
+#   - Grafana  : http://localhost:3000
+#   - InfluxDB : http://localhost:8086 (로컬 바인딩, 외부 접근 불가)
+# =============================================================================
+
+services:
+
+  # ---------------------------------------------------------------------------
+  # InfluxDB 2.x — 시계열 데이터베이스
+  #
+  # - Telegraf 가 수집한 메트릭을 저장하는 시계열 특화 DB
+  # - 포트를 127.0.0.1 로 바인딩하여 외부 네트워크에서 직접 접근 차단
+  # - DOCKER_INFLUXDB_INIT_* 환경변수로 최초 기동 시 자동 초기화 수행
+  # - healthcheck: influx ping 응답 확인 후 Telegraf/Grafana 기동 허용
+  # ---------------------------------------------------------------------------
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxdb
+    restart: unless-stopped
+    ports:
+      # 127.0.0.1 바인딩 — 호스트 외부에서 직접 접근 불가
+      - "127.0.0.1:8086:8086"
+    environment:
+      # 최초 기동 시 자동 초기화 모드 (이미 초기화된 경우 무시됨)
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      # 관리자 계정 — .env 에서 주입
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD}
+      # 조직명 및 기본 버킷 — .env 에서 주입
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET}
+      # API 토큰 — Telegraf/Grafana 인증에 사용
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN}
+    volumes:
+      # 데이터 영속성 — 컨테이너 재시작 시 데이터 유지
+      - influxdb_data:/var/lib/influxdb2
+    networks:
+      - monitoring
+    healthcheck:
+      # influx ping 으로 API 응답 여부 확인
+      test: ["CMD", "influx", "ping"]
+      interval: 10s      # 10초마다 체크
+      timeout: 5s        # 5초 내 응답 없으면 실패
+      retries: 5         # 5회 연속 실패 시 unhealthy
+      start_period: 30s  # 기동 후 30초는 체크 유예 (초기화 시간 확보)
+
+  # ---------------------------------------------------------------------------
+  # Telegraf — 메트릭 수집 에이전트
+  #
+  # - SNMP 플러그인: Cisco IOS, NX-OS, EVE-NG 서버 메트릭 수집
+  # - exec 플러그인: aci_collector.py 를 주기적으로 호출하여 ACI 메트릭 수집
+  # - InfluxDB healthcheck 통과 후 기동 (depends_on condition)
+  # - telegraf.conf  : 글로벌 설정 및 InfluxDB 출력 설정
+  # - inputs.d/      : 수집 대상별 입력 플러그인 설정 파일 (conf 분리 관리)
+  # ---------------------------------------------------------------------------
+  telegraf:
+    image: telegraf:1.29
+    container_name: telegraf
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        # InfluxDB 가 healthy 상태가 된 후에만 Telegraf 기동
+        condition: service_healthy
+    environment:
+      # InfluxDB 연결 정보 — telegraf.conf 의 outputs.influxdb_v2 에서 참조
+      INFLUXDB_URL: http://influxdb:8086
+      INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG: ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
+      # ACI APIC 접속 정보 — inputs.d/aci_rest.conf 의 exec 플러그인에서 참조
+      APIC_URL: ${APIC_URL}
+      APIC_USERNAME: ${APIC_USERNAME}
+      APIC_PASSWORD: ${APIC_PASSWORD}
+      # SNMPv3 인증 정보 — inputs.d/snmp_*.conf 에서 참조
+      SNMP_AUTH_USERNAME: ${SNMP_AUTH_USERNAME}
+      SNMP_AUTH_PASSWORD: ${SNMP_AUTH_PASSWORD}
+      SNMP_PRIV_PASSWORD: ${SNMP_PRIV_PASSWORD}
+    volumes:
+      # 글로벌 설정 및 InfluxDB 출력 설정 (읽기 전용 마운트)
+      - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
+      # 수집 대상별 입력 플러그인 설정 디렉토리 (읽기 전용 마운트)
+      - ./telegraf/inputs.d:/etc/telegraf/telegraf.d:ro
+      # ACI 수집 스크립트 (exec 플러그인이 호출)
+      - ./scripts:/scripts:ro
+    networks:
+      - monitoring
+
+  # ---------------------------------------------------------------------------
+  # aci-collector — ACI 메트릭 수집용 Python 컨테이너
+  #
+  # - Telegraf exec 플러그인이 이 컨테이너 안의 aci_collector.py 를 호출
+  # - python:3.11-slim 이미지 사용 (telegraf 이미지에 Python 미포함)
+  # - 기동 시 requirements.txt 자동 설치 후 대기 상태 유지
+  #
+  # Stage 2 (사내망 실배포) 전환 시:
+  #   telegraf/Dockerfile 로 Telegraf 이미지에 Python 통합하여
+  #   이 컨테이너 제거 예정 (telegraf/Dockerfile 주석 참고)
+  # ---------------------------------------------------------------------------
+  aci-collector:
+    image: python:3.11-slim
+    container_name: aci-collector
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    environment:
+      # ACI APIC 접속 정보 — aci_collector.py 에서 os.environ 으로 참조
+      APIC_URL: ${APIC_URL}
+      APIC_USERNAME: ${APIC_USERNAME}
+      APIC_PASSWORD: ${APIC_PASSWORD}
+    volumes:
+      # 수집 스크립트 및 requirements.txt 마운트
+      - ./scripts:/scripts:ro
+    working_dir: /scripts
+    # pip install 완료 후 tail -f /dev/null 로 컨테이너 유지
+    # Telegraf exec 플러그인이 주기적으로 aci_collector.py 를 호출
+    command: >
+      sh -c "pip install --no-cache-dir -r requirements.txt -q &&
+             tail -f /dev/null"
+    networks:
+      - monitoring
+
+  # ---------------------------------------------------------------------------
+  # Grafana — 메트릭 시각화
+  #
+  # - InfluxDB 를 데이터소스로 사용하여 대시보드 렌더링
+  # - provisioning/ 디렉토리로 데이터소스 및 대시보드 자동 프로비저닝
+  # - 익명 접근 차단 (GF_AUTH_ANONYMOUS_ENABLED: false)
+  # - 감사 로그 활성화 (GF_SECURITY_AUDIT_EVENTS_ENABLED: true)
+  # ---------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.2
+    container_name: grafana
+    restart: unless-stopped
+    depends_on:
+      influxdb:
+        condition: service_healthy
+    ports:
+      # 외부 접근 허용 — 브라우저에서 http://localhost:3000 으로 접속
+      - "3000:3000"
+    environment:
+      # 관리자 계정 — .env 에서 주입
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      # 세션 서명용 시크릿 키 — openssl rand -base64 24 로 생성 권장
+      GF_SECURITY_SECRET_KEY: ${GRAFANA_SECRET_KEY}
+      # 익명 접근 차단
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      # 로그인/로그아웃 등 보안 이벤트 감사 로그 활성화
+      GF_SECURITY_AUDIT_EVENTS_ENABLED: "true"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+    volumes:
+      # 데이터소스 및 대시보드 자동 프로비저닝 설정 (읽기 전용)
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # 대시보드 JSON 파일 (읽기 전용)
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      # Grafana 내부 데이터 영속성 (플러그인, 알림 이력 등)
+      - grafana_data:/var/lib/grafana
+    networks:
+      - monitoring
+
+# =============================================================================
+# 네트워크
+# =============================================================================
+networks:
+  monitoring:
+    # bridge 드라이버 — 컨테이너 간 내부 통신 전용 네트워크
+    driver: bridge
+
+# =============================================================================
+# 볼륨 (named volume — 컨테이너 삭제 후에도 데이터 유지)
+# =============================================================================
+volumes:
+  influxdb_data:   # InfluxDB 시계열 데이터 저장소
+  grafana_data:    # Grafana 플러그인, 알림 이력, 세션 데이터 저장소

@@ -1,0 +1,97 @@
+# =============================================================================
+# network-monitoring-telegraf / grafana/provisioning/datasources/influxdb.yml
+#
+# 목적: Grafana 시작 시 InfluxDB v2 데이터소스를 자동으로 프로비저닝
+#
+# 동작 방식:
+#   Grafana 기동 시 이 파일을 읽어 데이터소스를 자동 등록
+#   Web UI 에서 수동으로 데이터소스를 추가할 필요 없음
+#
+# 참조 문서:
+#   https://grafana.com/docs/grafana/latest/administration/provisioning/
+#
+# 주의사항:
+#   - url, token, organization, defaultBucket 은 .env 에서 주입된
+#     docker-compose.yml environment 값과 일치해야 함
+#   - 이 파일은 읽기 전용(ro) 으로 마운트되므로 Grafana Web UI 에서
+#     수정해도 재시작 시 이 파일 내용으로 복원됨
+# =============================================================================
+
+apiVersion: 1
+
+# -----------------------------------------------------------------------------
+# deleteDatasources
+#
+# 이전에 프로비저닝된 데이터소스 중 이 파일에서 제거된 항목을 자동 삭제
+# 데이터소스 이름 변경 시 이전 항목이 남지 않도록 관리
+# -----------------------------------------------------------------------------
+deleteDatasources:
+  - name: InfluxDB
+    orgId: 1
+
+# -----------------------------------------------------------------------------
+# datasources
+#
+# 프로비저닝할 데이터소스 목록
+# -----------------------------------------------------------------------------
+datasources:
+  - # 데이터소스 이름 — Grafana 대시보드 패널에서 참조하는 이름
+    name: InfluxDB
+
+    # 데이터소스 타입 — InfluxDB v2 Flux 쿼리 사용
+    type: influxdb
+
+    # 접근 방식
+    # proxy : Grafana 서버가 InfluxDB 에 요청 (권장)
+    # direct: 브라우저가 직접 InfluxDB 에 요청 (보안상 비권장)
+    access: proxy
+
+    # 조직 ID (Grafana 기본 조직: 1)
+    orgId: 1
+
+    # InfluxDB v2 API 엔드포인트
+    # docker-compose 내부 네트워크에서 서비스명(influxdb)으로 접근
+    url: http://influxdb:8086
+
+    # 기본 데이터소스로 설정 — 대시보드 패널 생성 시 자동 선택
+    isDefault: true
+
+    # 프로비저닝된 데이터소스는 Grafana Web UI 에서 삭제 불가
+    # 변경이 필요한 경우 이 파일을 수정 후 Grafana 재시작
+    editable: false
+
+    # -------------------------------------------------------------------------
+    # jsonData — InfluxDB v2 전용 설정
+    # -------------------------------------------------------------------------
+    jsonData:
+      # InfluxDB 쿼리 언어 선택
+      # flux    : InfluxDB v2 권장 쿼리 언어 (함수형, 강력한 데이터 변환)
+      # influxql: InfluxDB v1 호환 쿼리 언어
+      version: Flux
+
+      # InfluxDB 조직명 (.env 의 INFLUXDB_ORG 와 일치)
+      organization: homelab
+
+      # 기본 버킷명 (.env 의 INFLUXDB_BUCKET 과 일치)
+      defaultBucket: network-metrics
+
+      # TLS 설정 — InfluxDB 가 HTTP 이므로 비활성화
+      tlsSkipVerify: false
+
+    # -------------------------------------------------------------------------
+    # secureJsonData — 민감 정보 (암호화 저장)
+    #
+    # token: InfluxDB API 토큰
+    # Grafana 는 이 값을 암호화하여 내부 DB 에 저장
+    # .env 의 INFLUXDB_TOKEN 과 일치해야 함
+    #
+    # 주의: 이 파일이 Git 에 커밋될 경우 토큰이 노출됨
+    #       실제 토큰 대신 환경변수 참조 방식 사용 권장
+    #       Grafana 는 ${} 형식의 환경변수 참조를 지원하지 않으므로
+    #       docker-compose.yml 의 environment 블록에서 GF_INSTALL_PLUGINS 등
+    #       별도 방법으로 주입하거나 Grafana Vault 플러그인 활용
+    #
+    # 현재 Stage 1 (POC) 에서는 .env 관리로 충분
+    # -------------------------------------------------------------------------
+    secureJsonData:
+      token: ${INFLUXDB_TOKEN}
