@@ -68,7 +68,10 @@ services:
   # - inputs.d/      : 수집 대상별 입력 플러그인 설정 파일 (conf 분리 관리)
   # ---------------------------------------------------------------------------
   telegraf:
-    image: telegraf:1.29
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: telegraf-custom:1.29
     container_name: telegraf
     restart: unless-stopped
     depends_on:
