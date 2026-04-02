@@ -85,10 +85,13 @@ services:
       INFLUXDB_TOKEN: ${INFLUXDB_TOKEN}
       INFLUXDB_ORG: ${INFLUXDB_ORG}
       INFLUXDB_BUCKET: ${INFLUXDB_BUCKET}
-      # SNMPv3 인증 정보 — inputs.d/snmp_*.conf 에서 참조
+      # SNMPv3 인증 정보 — inputs.d/snmp_*.conf 에서 참조 (v0.4.1 이후 사용)
       SNMP_AUTH_USERNAME: ${SNMP_AUTH_USERNAME}
       SNMP_AUTH_PASSWORD: ${SNMP_AUTH_PASSWORD}
       SNMP_PRIV_PASSWORD: ${SNMP_PRIV_PASSWORD}
+      # SNMPv2c Community String — inputs.d/snmp_*.conf SNMPv2c 블록에서 참조
+      # v0.4.0: EVE-NG 테스트 전용 / v0.4.1 SNMPv3 전환 후 미사용
+      SNMP_COMMUNITY: ${SNMP_COMMUNITY}
     volumes:
       # 글로벌 설정 및 InfluxDB 출력 설정 (읽기 전용 마운트)
       - ./telegraf/telegraf.conf:/etc/telegraf/telegraf.conf:ro
