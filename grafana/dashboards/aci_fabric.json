@@ -21,7 +21,16 @@
   "__comment_19": "  aci_fault  — tags: severity / fields: count",
   "__comment_20": "  aci_health — fields: score",
   "__comment_21": "  aci_node   — tags: node_id, role, pod_id / fields: state",
-  "__comment_22": "=======================================================================",
+  "__comment_22": "",
+  "__comment_23": "v1.2.0 수정 내역:",
+  "__comment_24": "  [패널 4] last() 후 group() 누락으로 count=1 반환되던 문제 수정.",
+  "__comment_25": "           filter(state==1) → last() → group() → count() 순서로 전체 합산.",
+  "__comment_26": "  [패널 5] severity 별 series 가 별도 group 으로 존재하여 pivot 이",
+  "__comment_27": "           컬럼 분리를 못하던 문제 수정.",
+  "__comment_28": "           aggregateWindow() 추가 및 pivot 전 group() 으로 단일 테이블화.",
+  "__comment_29": "  [패널 7] mappings 포맷 수정: value 별 별도 array element 방식은",
+  "__comment_30": "           첫 항목만 적용됨. 모든 value 를 단일 options object 에 정의.",
+  "__comment_31": "=======================================================================",
   "id": null,
   "uid": "aci-fabric-001",
   "title": "ACI Fabric",
@@ -29,7 +38,7 @@
   "tags": ["aci", "network", "telegraf"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-3h",
@@ -185,7 +194,9 @@
       "__comment_p4": "패널 4 — Node Up/Down 현황 (Stat)",
       "__comment_p4_1": "전체 노드 수 대비 Up(in-service) 노드 수",
       "__comment_p4_2": "state=1: in-service / state=0: out-of-service",
-      "__comment_p4_3": "-------------------------------------------------------------------",
+      "__comment_p4_3": "[v1.2.0 수정] last() 후 group() 누락으로 항상 count=1 반환되던 문제 수정.",
+      "__comment_p4_4": "filter(state==1) → last() → group() → count() 순서로 전체 합산.",
+      "__comment_p4_5": "-------------------------------------------------------------------",
       "id": 4,
       "type": "stat",
       "title": "Nodes Up",
@@ -214,7 +225,7 @@
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "// in-service 상태 노드 수 집계\n// state=1 인 노드만 필터링 후 count\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> filter(fn: (r) => r._value == 1)\n  |> last()\n  |> count()"
+          "query": "// in-service 상태 노드 수 집계\n// state=1 인 노드만 필터링 후\n// last() 로 노드별 최신값 1개씩 확보\n// group() 으로 단일 테이블로 합산 → count() 로 전체 수 산출\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> filter(fn: (r) => r._value == 1)\n  |> last()\n  |> group()\n  |> count()"
         }
       ]
     },
@@ -224,7 +235,10 @@
       "__comment_p5": "패널 5 — Fault 추이 (Time Series)",
       "__comment_p5_1": "severity 별 Fault 수 시계열 그래프",
       "__comment_p5_2": "critical=red / major=orange / minor=yellow / warning=blue",
-      "__comment_p5_3": "-------------------------------------------------------------------",
+      "__comment_p5_3": "[v1.2.0 수정] severity 별 series 가 별도 group 으로 존재하여",
+      "__comment_p5_4": "pivot() 이 컬럼 분리를 못하던 문제 수정.",
+      "__comment_p5_5": "aggregateWindow() 로 시계열 정렬 후 group() 으로 단일 테이블화한 뒤 pivot.",
+      "__comment_p5_6": "-------------------------------------------------------------------",
       "id": 5,
       "type": "timeseries",
       "title": "Fault 추이 (severity 별)",
@@ -259,7 +273,7 @@
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "// Fault 수 시계열 — severity 별로 피벗하여 각 컬럼으로 표시\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aci_fault\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> pivot(\n       rowKey: [\"_time\"],\n       columnKey: [\"severity\"],\n       valueColumn: \"_value\"\n     )"
+          "query": "// Fault 수 시계열 — severity 별로 피벗하여 각 컬럼으로 표시\n// aggregateWindow() 로 windowPeriod 단위 시계열 정렬\n// group() 으로 severity series 를 단일 테이블로 합산\n// pivot() 으로 severity → 컬럼 분리\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"aci_fault\")\n  |> filter(fn: (r) => r._field == \"count\")\n  |> aggregateWindow(every: v.windowPeriod, fn: last, createEmpty: false)\n  |> group()\n  |> pivot(\n       rowKey: [\"_time\"],\n       columnKey: [\"severity\"],\n       valueColumn: \"_value\"\n     )"
         }
       ]
     },
@@ -315,7 +329,9 @@
       "__comment_p7_1": "전체 ACI Node 목록과 현재 상태 표시",
       "__comment_p7_2": "컬럼: node_id / role / pod_id / state",
       "__comment_p7_3": "state 값 매핑: 1=in-service(green) / 0=out-of-service(red) / -1=unknown(gray)",
-      "__comment_p7_4": "-------------------------------------------------------------------",
+      "__comment_p7_4": "[v1.2.0 수정] mappings 포맷 수정: value 별 별도 array element 방식은",
+      "__comment_p7_5": "첫 항목만 적용됨. 모든 value 를 단일 options object 에 정의해야 정상 동작.",
+      "__comment_p7_6": "-------------------------------------------------------------------",
       "id": 7,
       "type": "table",
       "title": "Node 상태 목록",
@@ -326,15 +342,20 @@
         "defaults": { "custom": { "align": "auto" } },
         "overrides": [
           {
-            "__comment": "state 필드에 색상 매핑 적용",
+            "__comment": "state 필드 색상 매핑 — 모든 value 를 단일 options object 에 정의",
             "matcher": { "id": "byName", "options": "state" },
             "properties": [
               {
                 "id": "mappings",
                 "value": [
-                  { "type": "value", "options": { "1":  { "text": "in-service",     "color": "green" } } },
-                  { "type": "value", "options": { "0":  { "text": "out-of-service", "color": "red"   } } },
-                  { "type": "value", "options": { "-1": { "text": "unknown",         "color": "gray"  } } }
+                  {
+                    "type": "value",
+                    "options": {
+                      "1":  { "text": "in-service",     "color": "green", "index": 0 },
+                      "0":  { "text": "out-of-service", "color": "red",   "index": 1 },
+                      "-1": { "text": "unknown",         "color": "gray",  "index": 2 }
+                    }
+                  }
                 ]
               },
               { "id": "custom.displayMode", "value": "color-background" }

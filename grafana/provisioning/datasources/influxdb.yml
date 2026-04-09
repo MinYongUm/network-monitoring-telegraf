@@ -15,6 +15,13 @@
 #     docker-compose.yml environment 값과 일치해야 함
 #   - 이 파일은 읽기 전용(ro) 으로 마운트되므로 Grafana Web UI 에서
 #     수정해도 재시작 시 이 파일 내용으로 복원됨
+#
+# v1.2.0 수정 내역:
+#   - uid: influxdb 추가
+#     Grafana 는 uid 가 없으면 랜덤 uid(예: P951FEA4DE68E13C5)를 자동 부여함
+#     대시보드 JSON 파일의 datasource uid 참조값("influxdb")과 불일치하여
+#     "Datasource influxdb was not found" 에러 발생 → 모든 패널 No data
+#     uid 를 명시적으로 고정하면 재시작 시에도 항상 동일한 uid 가 유지됨
 # =============================================================================
 
 apiVersion: 1
@@ -37,6 +44,12 @@ deleteDatasources:
 datasources:
   - # 데이터소스 이름 — Grafana 대시보드 패널에서 참조하는 이름
     name: InfluxDB
+
+    # [v1.2.0 추가] 데이터소스 고유 식별자
+    # 대시보드 JSON 파일의 datasource.uid 값과 반드시 일치해야 함
+    # uid 를 명시하지 않으면 Grafana 가 랜덤 uid 를 부여하여
+    # 재시작 시 JSON 파일의 "influxdb" 참조와 불일치 → No data 발생
+    uid: influxdb
 
     # 데이터소스 타입 — InfluxDB v2 Flux 쿼리 사용
     type: influxdb
