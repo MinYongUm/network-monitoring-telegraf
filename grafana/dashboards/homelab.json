@@ -52,7 +52,18 @@
   "__comment_50": "  패널 7 필터 수정:",
   "__comment_51": "    EVE-NG 동적 qemu 마운트(/opt/unetlab/tmp/...) 제외.",
   "__comment_52": "    fstype=ext4 + mountpoint !~ /\\/tmp\\// 정규식 필터 적용.",
-  "__comment_53": "=======================================================================",
+  "__comment_53": "",
+  "__comment_54": "v1.2.x 수정 내역 (색상 디자인):",
+  "__comment_55": "  fillOpacity 전 패널 10 으로 통일",
+  "__comment_56": "    패널 6: 15 → 10 (다른 Time Series 패널과 통일)",
+  "__comment_57": "    패널 10: 5 → 10 (다른 Time Series 패널과 통일)",
+  "__comment_58": "  색상 팔레트 (기존 설정 유지, 이미 통일된 상태):",
+  "__comment_59": "    CPU user=blue / system=red / iowait=orange / softirq=yellow",
+  "__comment_60": "    메모리 used=red / cached=blue",
+  "__comment_61": "    디스크 read=green / write=orange",
+  "__comment_62": "    네트워크 rx=green / tx=blue",
+  "__comment_63": "    부하 load1=red / load5=orange / load15=blue",
+  "__comment_64": "=======================================================================",
   "id": null,
   "uid": "homelab-001",
   "title": "Homelab",
@@ -65,7 +76,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 6,
+  "version": 7,
   "refresh": "2m",
   "time": {
     "from": "now-3h",
@@ -511,7 +522,8 @@
       "__comment_p6_1": "used = MemTotal - MemAvailable (pivot 방식)",
       "__comment_p6_2": "union 후 group(columns: [_field]) 필수",
       "__comment_p6_3": "  → 누락 시 Grafana 가 _field 를 series 명으로 인식 못하고 _value 로 표시",
-      "__comment_p6_4": "-------------------------------------------------------------------",
+      "__comment_p6_4": "[v1.2.x 수정] fillOpacity 15 → 10 (전 Time Series 패널 통일)",
+      "__comment_p6_5": "-------------------------------------------------------------------",
       "id": 6,
       "type": "timeseries",
       "title": "메모리 사용량 추이",
@@ -531,7 +543,7 @@
           "unit": "bytes",
           "custom": {
             "lineWidth": 1,
-            "fillOpacity": 15,
+            "fillOpacity": 10,
             "spanNulls": false
           },
           "min": 0
@@ -854,7 +866,8 @@
       "__comment_p10_1": "_field: node_load1/5/15",
       "__comment_p10_2": "각 스트림에서 map 으로 {_time, _field, _value} 만 반환 → extra 태그 제거",
       "__comment_p10_3": "union → pivot → keep 으로 load1/5/15 컬럼만 유지",
-      "__comment_p10_4": "-------------------------------------------------------------------",
+      "__comment_p10_4": "[v1.2.x 수정] fillOpacity 5 → 10 (전 Time Series 패널 통일)",
+      "__comment_p10_5": "-------------------------------------------------------------------",
       "id": 10,
       "type": "timeseries",
       "title": "시스템 부하 평균",
@@ -874,7 +887,7 @@
           "unit": "short",
           "custom": {
             "lineWidth": 2,
-            "fillOpacity": 5
+            "fillOpacity": 10
           },
           "min": 0
         },

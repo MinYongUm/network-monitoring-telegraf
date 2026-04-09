@@ -43,7 +43,15 @@
   "__comment_41": "               원래 source 태그 필터 방식으로 원복.",
   "__comment_42": "  [패널 9]     source 컬럼 제거, _measurement → Device Type 컬럼으로 대체.",
   "__comment_43": "               mappings 포맷 단일 object 로 통합.",
-  "__comment_44": "=======================================================================",
+  "__comment_44": "",
+  "__comment_45": "v1.2.x 수정 내역 (색상 디자인):",
+  "__comment_46": "  [패널 4]  noValue: '0' 추가 — No data 대신 0 표시 (에러 없음 의미)",
+  "__comment_47": "  [패널 5]  color fixed green 추가 — 수신(In/RX) 계열 색상 통일",
+  "__comment_48": "  [패널 6]  color fixed blue 추가 — 송신(Out/TX) 계열 색상 통일",
+  "__comment_49": "  [패널 7]  overrides 추가 — InErrors=red / OutErrors=orange, palette-classic 제거",
+  "__comment_50": "  [패널 8]  overrides 추가 — InDiscards=orange / OutDiscards=yellow",
+  "__comment_51": "  색상 팔레트 원칙: 수신=green / 송신=blue / 에러=red / 드롭/경고=orange",
+  "__comment_52": "=======================================================================",
   "id": null,
   "uid": "snmp-traffic-001",
   "title": "SNMP Traffic",
@@ -56,7 +64,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-3h",
@@ -305,7 +313,9 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p4": "패널 4 — 에러 발생 인터페이스 수 (Stat)",
       "__comment_p4_1": "[v1.2.0 수정] group(hostname+ifName) → sum() → filter(>0) → group() → count()",
-      "__comment_p4_2": "-------------------------------------------------------------------",
+      "__comment_p4_2": "[v1.2.x 수정] noValue: '0' 추가",
+      "__comment_p4_3": "  에러 인터페이스가 없을 때 No data 대신 0 표시 → green 배경 유지",
+      "__comment_p4_4": "-------------------------------------------------------------------",
       "id": 4,
       "type": "stat",
       "title": "에러 인터페이스",
@@ -323,6 +333,7 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "0",
           "color": {
             "mode": "thresholds"
           },
@@ -366,7 +377,9 @@
       "__comment_p5": "패널 5 — 수신 트래픽 BPS (Time Series)",
       "__comment_p5_1": "[v1.2.0 수정] source 태그가 실제 수집 데이터에 존재하므로",
       "__comment_p5_2": "원래 source 태그 필터 방식으로 원복.",
-      "__comment_p5_3": "-------------------------------------------------------------------",
+      "__comment_p5_3": "[v1.2.x 수정] color fixed green 추가",
+      "__comment_p5_4": "  수신(In/RX) 계열 색상 통일: green",
+      "__comment_p5_5": "-------------------------------------------------------------------",
       "id": 5,
       "type": "timeseries",
       "title": "수신 트래픽 (BPS)",
@@ -384,6 +397,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bps",
+          "color": {
+            "fixedColor": "green",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
@@ -420,7 +437,9 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p6": "패널 6 — 송신 트래픽 BPS (Time Series)",
       "__comment_p6_1": "[v1.2.0 수정] source 태그 필터 원복",
-      "__comment_p6_2": "-------------------------------------------------------------------",
+      "__comment_p6_2": "[v1.2.x 수정] color fixed blue 추가",
+      "__comment_p6_3": "  송신(Out/TX) 계열 색상 통일: blue",
+      "__comment_p6_4": "-------------------------------------------------------------------",
       "id": 6,
       "type": "timeseries",
       "title": "송신 트래픽 (BPS)",
@@ -438,6 +457,10 @@
       "fieldConfig": {
         "defaults": {
           "unit": "bps",
+          "color": {
+            "fixedColor": "blue",
+            "mode": "fixed"
+          },
           "custom": {
             "lineWidth": 1,
             "fillOpacity": 10,
@@ -474,7 +497,11 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p7": "패널 7 — 에러 카운터 (Time Series)",
       "__comment_p7_1": "[v1.2.0 수정] source 태그 필터 원복 (refId A, B 모두)",
-      "__comment_p7_2": "-------------------------------------------------------------------",
+      "__comment_p7_2": "[v1.2.x 수정] overrides 추가, palette-classic 제거",
+      "__comment_p7_3": "  InErrors=red (수신 에러, 심각)",
+      "__comment_p7_4": "  OutErrors=orange (송신 에러, 경고)",
+      "__comment_p7_5": "  byRegexp 매처: _field 이름에 In/Out 포함 여부로 구분",
+      "__comment_p7_6": "-------------------------------------------------------------------",
       "id": 7,
       "type": "timeseries",
       "title": "에러 카운터 증가율",
@@ -497,9 +524,6 @@
             "fillOpacity": 10
           },
           "min": 0,
-          "color": {
-            "mode": "palette-classic"
-          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -513,7 +537,41 @@
               }
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "__comment": "수신 에러: red (심각)",
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*InErrors.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "__comment": "송신 에러: orange (경고)",
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*OutErrors.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
@@ -551,7 +609,11 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p8": "패널 8 — 드롭 카운터 (Time Series)",
       "__comment_p8_1": "[v1.2.0 수정] source 태그 필터 원복 (refId A, B 모두)",
-      "__comment_p8_2": "-------------------------------------------------------------------",
+      "__comment_p8_2": "[v1.2.x 수정] overrides 추가",
+      "__comment_p8_3": "  InDiscards=orange (수신 드롭, 경고)",
+      "__comment_p8_4": "  OutDiscards=yellow (송신 드롭, 주의)",
+      "__comment_p8_5": "  에러(red/orange)보다 한 단계 낮은 심각도 표현",
+      "__comment_p8_6": "-------------------------------------------------------------------",
       "id": 8,
       "type": "timeseries",
       "title": "드롭 카운터 증가율",
@@ -587,7 +649,41 @@
               }
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "__comment": "수신 드롭: orange (경고)",
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*InDiscards.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "__comment": "송신 드롭: yellow (주의)",
+            "matcher": {
+              "id": "byRegexp",
+              "options": ".*OutDiscards.*"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "yellow",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "legend": {
