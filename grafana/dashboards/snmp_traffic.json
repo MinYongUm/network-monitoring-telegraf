@@ -5,18 +5,18 @@
   "__comment_3": "목적: Cisco IOS / NX-OS 인터페이스 트래픽 메트릭 시각화 대시보드",
   "__comment_4": "",
   "__comment_5": "패널 구성:",
-  "__comment_6": "  Row 1 - 요약 (Stat 패널)",
+  "__comment_6": "  Row 1 - Interface Summary",
   "__comment_7": "    [1] 전체 인터페이스 수",
   "__comment_8": "    [2] Up 인터페이스 수",
   "__comment_9": "    [3] Down 인터페이스 수",
   "__comment_10": "    [4] 에러 발생 인터페이스 수",
-  "__comment_11": "  Row 2 - 트래픽 시계열",
+  "__comment_11": "  Row 2 - Traffic",
   "__comment_12": "    [5] 인터페이스별 수신 BPS (Time Series)",
   "__comment_13": "    [6] 인터페이스별 송신 BPS (Time Series)",
-  "__comment_14": "  Row 3 - 에러/드롭",
+  "__comment_14": "  Row 3 - Errors & Drops",
   "__comment_15": "    [7] 인터페이스별 에러 카운터 (Time Series)",
   "__comment_16": "    [8] 인터페이스별 드롭 카운터 (Time Series)",
-  "__comment_17": "  Row 4 - 상태 테이블",
+  "__comment_17": "  Row 4 - Interface Status",
   "__comment_18": "    [9] 인터페이스 상태 목록 (Table)",
   "__comment_19": "",
   "__comment_20": "데이터소스: InfluxDB (Flux 쿼리)",
@@ -44,14 +44,19 @@
   "__comment_42": "  [패널 9]     source 컬럼 제거, _measurement → Device Type 컬럼으로 대체.",
   "__comment_43": "               mappings 포맷 단일 object 로 통합.",
   "__comment_44": "",
-  "__comment_45": "v1.2.x 수정 내역 (색상 디자인):",
+  "__comment_45": "v1.2.1 수정 내역 (색상 디자인):",
   "__comment_46": "  [패널 4]  noValue: '0' 추가 — No data 대신 0 표시 (에러 없음 의미)",
   "__comment_47": "  [패널 5]  color fixed green 추가 — 수신(In/RX) 계열 색상 통일",
   "__comment_48": "  [패널 6]  color fixed blue 추가 — 송신(Out/TX) 계열 색상 통일",
   "__comment_49": "  [패널 7]  overrides 추가 — InErrors=red / OutErrors=orange, palette-classic 제거",
   "__comment_50": "  [패널 8]  overrides 추가 — InDiscards=orange / OutDiscards=yellow",
   "__comment_51": "  색상 팔레트 원칙: 수신=green / 송신=blue / 에러=red / 드롭/경고=orange",
-  "__comment_52": "=======================================================================",
+  "__comment_52": "",
+  "__comment_53": "v1.2.2 수정 내역 (레이아웃):",
+  "__comment_54": "  Row 패널 4개 추가 (id: 10~13)",
+  "__comment_55": "  Interface Summary / Traffic / Errors & Drops / Interface Status",
+  "__comment_56": "  각 패널 gridPos.y 조정",
+  "__comment_57": "=======================================================================",
   "id": null,
   "uid": "snmp-traffic-001",
   "title": "SNMP Traffic",
@@ -64,7 +69,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 5,
+  "version": 6,
   "refresh": "1m",
   "time": {
     "from": "now-3h",
@@ -154,6 +159,14 @@
   },
   "panels": [
     {
+      "__comment": "Row 1 — Interface Summary",
+      "id": 10,
+      "type": "row",
+      "title": "Interface Summary",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+    },
+    {
       "__comment": "-------------------------------------------------------------------",
       "__comment_p1": "패널 1 — 전체 인터페이스 수 (Stat)",
       "__comment_p1_1": "[v1.2.0 수정] union() 후 group() 누락 수정 → group() → count()",
@@ -164,7 +177,7 @@
       "description": "현재 수집 중인 전체 인터페이스 수.",
       "gridPos": {
         "x": 0,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -212,7 +225,7 @@
       "description": "현재 ifOperStatus=1 (up) 상태인 인터페이스 수.",
       "gridPos": {
         "x": 6,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -260,7 +273,7 @@
       "description": "현재 ifOperStatus=2 (down) 상태인 인터페이스 수. 0 이상이면 즉각 확인 필요.",
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -313,7 +326,7 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p4": "패널 4 — 에러 발생 인터페이스 수 (Stat)",
       "__comment_p4_1": "[v1.2.0 수정] group(hostname+ifName) → sum() → filter(>0) → group() → count()",
-      "__comment_p4_2": "[v1.2.x 수정] noValue: '0' 추가",
+      "__comment_p4_2": "[v1.2.1 수정] noValue: '0' 추가",
       "__comment_p4_3": "  에러 인터페이스가 없을 때 No data 대신 0 표시 → green 배경 유지",
       "__comment_p4_4": "-------------------------------------------------------------------",
       "id": 4,
@@ -322,7 +335,7 @@
       "description": "에러 카운터(ifInErrors + ifOutErrors)가 0 초과인 인터페이스 수.",
       "gridPos": {
         "x": 18,
-        "y": 0,
+        "y": 1,
         "w": 6,
         "h": 4
       },
@@ -373,11 +386,19 @@
       ]
     },
     {
+      "__comment": "Row 2 — Traffic",
+      "id": 11,
+      "type": "row",
+      "title": "Traffic",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+    },
+    {
       "__comment": "-------------------------------------------------------------------",
       "__comment_p5": "패널 5 — 수신 트래픽 BPS (Time Series)",
       "__comment_p5_1": "[v1.2.0 수정] source 태그가 실제 수집 데이터에 존재하므로",
       "__comment_p5_2": "원래 source 태그 필터 방식으로 원복.",
-      "__comment_p5_3": "[v1.2.x 수정] color fixed green 추가",
+      "__comment_p5_3": "[v1.2.1 수정] color fixed green 추가",
       "__comment_p5_4": "  수신(In/RX) 계열 색상 통일: green",
       "__comment_p5_5": "-------------------------------------------------------------------",
       "id": 5,
@@ -386,7 +407,7 @@
       "description": "인터페이스별 수신 트래픽. ifHCInOctets 기반 bits/s 변환값.",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 8
       },
@@ -437,7 +458,7 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p6": "패널 6 — 송신 트래픽 BPS (Time Series)",
       "__comment_p6_1": "[v1.2.0 수정] source 태그 필터 원복",
-      "__comment_p6_2": "[v1.2.x 수정] color fixed blue 추가",
+      "__comment_p6_2": "[v1.2.1 수정] color fixed blue 추가",
       "__comment_p6_3": "  송신(Out/TX) 계열 색상 통일: blue",
       "__comment_p6_4": "-------------------------------------------------------------------",
       "id": 6,
@@ -446,7 +467,7 @@
       "description": "인터페이스별 송신 트래픽. ifHCOutOctets 기반 bits/s 변환값.",
       "gridPos": {
         "x": 12,
-        "y": 4,
+        "y": 6,
         "w": 12,
         "h": 8
       },
@@ -494,10 +515,18 @@
       ]
     },
     {
+      "__comment": "Row 3 — Errors & Drops",
+      "id": 12,
+      "type": "row",
+      "title": "Errors & Drops",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+    },
+    {
       "__comment": "-------------------------------------------------------------------",
       "__comment_p7": "패널 7 — 에러 카운터 (Time Series)",
       "__comment_p7_1": "[v1.2.0 수정] source 태그 필터 원복 (refId A, B 모두)",
-      "__comment_p7_2": "[v1.2.x 수정] overrides 추가, palette-classic 제거",
+      "__comment_p7_2": "[v1.2.1 수정] overrides 추가, palette-classic 제거",
       "__comment_p7_3": "  InErrors=red (수신 에러, 심각)",
       "__comment_p7_4": "  OutErrors=orange (송신 에러, 경고)",
       "__comment_p7_5": "  byRegexp 매처: _field 이름에 In/Out 포함 여부로 구분",
@@ -508,7 +537,7 @@
       "description": "인터페이스별 에러 카운터 초당 증가율. 0 초과 지속 시 물리 계층 확인 필요.",
       "gridPos": {
         "x": 0,
-        "y": 12,
+        "y": 15,
         "w": 12,
         "h": 8
       },
@@ -609,7 +638,7 @@
       "__comment": "-------------------------------------------------------------------",
       "__comment_p8": "패널 8 — 드롭 카운터 (Time Series)",
       "__comment_p8_1": "[v1.2.0 수정] source 태그 필터 원복 (refId A, B 모두)",
-      "__comment_p8_2": "[v1.2.x 수정] overrides 추가",
+      "__comment_p8_2": "[v1.2.1 수정] overrides 추가",
       "__comment_p8_3": "  InDiscards=orange (수신 드롭, 경고)",
       "__comment_p8_4": "  OutDiscards=yellow (송신 드롭, 주의)",
       "__comment_p8_5": "  에러(red/orange)보다 한 단계 낮은 심각도 표현",
@@ -620,7 +649,7 @@
       "description": "인터페이스별 드롭 카운터 초당 증가율. 지속 발생 시 버퍼/QoS 확인 필요.",
       "gridPos": {
         "x": 12,
-        "y": 12,
+        "y": 15,
         "w": 12,
         "h": 8
       },
@@ -718,6 +747,14 @@
       ]
     },
     {
+      "__comment": "Row 4 — Interface Status",
+      "id": 13,
+      "type": "row",
+      "title": "Interface Status",
+      "collapsed": false,
+      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }
+    },
+    {
       "__comment": "-------------------------------------------------------------------",
       "__comment_p9": "패널 9 — 인터페이스 상태 목록 (Table)",
       "__comment_p9_1": "[v1.2.0 수정] _measurement → Device Type 컬럼으로 rename",
@@ -729,7 +766,7 @@
       "description": "전체 인터페이스의 링크 상태 및 Device Type(IOS/NX-OS) 요약.",
       "gridPos": {
         "x": 0,
-        "y": 20,
+        "y": 24,
         "w": 24,
         "h": 10
       },
