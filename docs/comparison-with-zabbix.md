@@ -30,7 +30,7 @@
 | 항목 | Telegraf (TIG 스택) | Zabbix |
 |---|---|---|
 | 구성 | Telegraf + InfluxDB + Grafana | Zabbix Server + PostgreSQL + Grafana |
-| 수집 방식 | Pull (SNMP, exec, prometheus) | Push/Pull 혼용 |
+| 수집 방식 | Pull (SNMP, prometheus) + Python 컨테이너 직접 write (ACI) | Push/Pull 혼용 |
 | 데이터 저장 | InfluxDB (시계열 특화) | PostgreSQL (범용 RDBMS) |
 | 알림 | Grafana Alert + Webhook | Zabbix 내장 알림 엔진 |
 | 설정 관리 | conf 파일 (코드 기반) | XML 템플릿 + Web UI |
@@ -42,15 +42,15 @@
 ### 테스트 환경
 
 ```
-호스트: 업무 노트북 VM (Docker Compose)
+호스트: 개인 서버 (Docker Compose)
 OS: Ubuntu 22.04 LTS
 CPU: (작성 예정)
 RAM: (작성 예정)
 수집 대상:
-  - Cisco ACI APIC
-  - Cisco IOS 장비 n대
-  - Cisco NX-OS 장비 n대
-  - EVE-NG 홈 서버 (192.168.0.200)
+  - Cisco ACI APIC (Sandbox)
+  - Cisco IOS 장비 1대 (vIOS, EVE-NG)
+  - Cisco NX-OS 장비 1대 (vNX-OS, EVE-NG)
+  - EVE-NG 홈 서버 1대
 ```
 
 ### 수집 주기
@@ -95,11 +95,12 @@ RAM: (작성 예정)
 
 | 항목 | Telegraf | Zabbix |
 |---|---|---|
-| 수집 방식 | exec 플러그인 → Python 스크립트 | External Check → Python 스크립트 |
+| 수집 방식 | aci-collector 컨테이너 → InfluxDB HTTP API 직접 write | External Check → Python 스크립트 |
 | 스크립트 위치 | scripts/aci_collector.py | /usr/lib/zabbix/externalscripts/ |
 | 인증 방식 | REST API 토큰 (환경변수) | REST API 토큰 (환경변수) |
-| 실제 동작 여부 | (작성 예정) | (작성 예정) |
-| 특이사항 | (작성 예정) | (작성 예정) |
+| 크리덴셜 격리 | aci-collector 컨테이너에만 APIC 크리덴셜 보유 | (작성 예정) |
+| 실제 동작 여부 | 완료 | (작성 예정) |
+| 특이사항 | Telegraf exec 플러그인 미사용 — 크리덴셜 격리 및 공격 표면 최소화 목적 | (작성 예정) |
 
 ### Cisco IOS / NX-OS (SNMPv3)
 
@@ -109,7 +110,8 @@ RAM: (작성 예정)
 | 크리덴셜 관리 | .env → environment 주입 | Web UI 매크로 등록 |
 | OID 관리 | conf 파일에 직접 명시 | 템플릿 XML 내 정의 |
 | 장비 추가 방법 | agents 목록 수정 후 restart | Web UI 호스트 등록 |
-| 실제 동작 여부 | (작성 예정) | (작성 예정) |
+| 실제 동작 여부 | 완료 (SNMPv2c + SNMPv3 동시 수집) | (작성 예정) |
+| 특이사항 | vNX-OS 이미지 CISCO-MEMORY-POOL-MIB 미지원 — 실 장비에서는 수집 가능 | (작성 예정) |
 
 ### EVE-NG 홈 서버
 
@@ -118,8 +120,9 @@ RAM: (작성 예정)
 | 에이전트 | Node Exporter (포트 9100) | Zabbix Agent2 (포트 10050) |
 | 수집 방향 | Pull (Telegraf → 서버) | Passive (Zabbix → 서버) |
 | 암호화 | 없음 (로컬 네트워크) | PSK 암호화 |
-| 홈 서버 작업 | Docker 컨테이너 1개 실행 | Docker 컨테이너 1개 + PSK 파일 |
-| 실제 동작 여부 | (작성 예정) | (작성 예정) |
+| 홈 서버 작업 | 바이너리 직접 설치 + systemd 등록 | Docker 컨테이너 1개 + PSK 파일 |
+| 실제 동작 여부 | 완료 | (작성 예정) |
+| 특이사항 | EVE-NG 서버에 Docker 설치 불가 (네트워크 네임스페이스 충돌) — 바이너리 설치가 유일한 안전한 방법 | (작성 예정) |
 
 
 ## 데이터 저장
@@ -141,7 +144,7 @@ RAM: (작성 예정)
 |---|---|---|
 | 인터페이스 BPS 계산 | derivative() 내장 함수 사용 | (작성 예정) |
 | 시간 범위 집계 | aggregateWindow() | (작성 예정) |
-| 다중 측정값 조합 | join()/union() | (작성 예정) |
+| 다중 측정값 조합 | join() / union() | (작성 예정) |
 | 체감 난이도 | (작성 예정) | (작성 예정) |
 
 
@@ -178,8 +181,9 @@ RAM: (작성 예정)
 | 알림 조건 설정 위치 | Grafana Web UI | Zabbix Web UI |
 | 알림 이력 저장 | Grafana DB | Zabbix DB |
 | 알림 억제/그룹화 | Grafana Silences | Zabbix Maintenance |
-| 실제 알림 수신 여부 | (작성 예정) | (작성 예정) |
+| 실제 알림 수신 여부 | 완료 | (작성 예정) |
 | 오탐(False Positive) 발생 | (작성 예정) | (작성 예정) |
+| 특이사항 | Alert Rule Labels 에 severity 사용 불가 (Grafana 예약 label) — grafana_folder 로 매칭 | (작성 예정) |
 
 
 ## 운영 관리
