@@ -35,13 +35,17 @@
   "__comment_33": "  [패널 4] noValue: '0' 추가",
   "__comment_34": "           ACI Sandbox 환경에서 state=-1(unknown) → in-service 노드 없음",
   "__comment_35": "           → count() 결과 없음 → No data + red 배경으로 표시되던 문제",
-  "__comment_36": "           noValue: '0' 으로 0 표시 (데이터 없음을 명시적 0으로 처리)",
+  "__comment_36": "           noValue: '0' 으로 0 표시 (Sandbox 환경에서의 정상 케이스)",
   "__comment_37": "",
   "__comment_38": "v1.2.2 수정 내역 (레이아웃):",
   "__comment_39": "  Row 패널 3개 추가 (id: 8~10)",
   "__comment_40": "  Fabric Summary / Trends / Node Status",
   "__comment_41": "  각 패널 gridPos.y 조정",
-  "__comment_42": "=======================================================================",
+  "__comment_42": "",
+  "__comment_43": "v1.2.3 수정 내역 (문구 정리):",
+  "__comment_44": "  [패널 5] title: 'Fault 추이 (severity 별)' → 'Fault 추이 (Severity별)'",
+  "__comment_45": "  [패널 7] Table 컬럼명 정리: node_id→Node ID / role→Role / pod_id→Pod ID",
+  "__comment_46": "=======================================================================",
   "id": null,
   "uid": "aci-fabric-001",
   "title": "ACI Fabric",
@@ -49,7 +53,7 @@
   "tags": ["aci", "network", "telegraf"],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-3h",
@@ -272,10 +276,11 @@
       "__comment_p5_3": "[v1.2.0 수정] severity 별 series 가 별도 group 으로 존재하여",
       "__comment_p5_4": "pivot() 이 컬럼 분리를 못하던 문제 수정.",
       "__comment_p5_5": "aggregateWindow() 로 시계열 정렬 후 group() 으로 단일 테이블화한 뒤 pivot.",
-      "__comment_p5_6": "-------------------------------------------------------------------",
+      "__comment_p5_6": "[v1.2.3 수정] title: 'Fault 추이 (severity 별)' → 'Fault 추이 (Severity별)'",
+      "__comment_p5_7": "-------------------------------------------------------------------",
       "id": 5,
       "type": "timeseries",
-      "title": "Fault 추이 (severity 별)",
+      "title": "Fault 추이 (Severity별)",
       "description": "시간에 따른 severity 별 Fault 수 변화.",
       "gridPos": { "x": 0, "y": 6, "w": 12, "h": 8 },
       "datasource": { "type": "influxdb", "uid": "influxdb" },
@@ -374,7 +379,9 @@
       "__comment_p7_3": "state 값 매핑: 1=in-service(green) / 0=out-of-service(red) / -1=unknown(gray)",
       "__comment_p7_4": "[v1.2.0 수정] mappings 포맷 수정: value 별 별도 array element 방식은",
       "__comment_p7_5": "첫 항목만 적용됨. 모든 value 를 단일 options object 에 정의해야 정상 동작.",
-      "__comment_p7_6": "-------------------------------------------------------------------",
+      "__comment_p7_6": "[v1.2.3 수정] Table 컬럼명 정리",
+      "__comment_p7_7": "  node_id→Node ID / role→Role / pod_id→Pod ID",
+      "__comment_p7_8": "-------------------------------------------------------------------",
       "id": 7,
       "type": "table",
       "title": "Node 상태 목록",
@@ -414,7 +421,7 @@
         {
           "refId": "A",
           "datasource": { "type": "influxdb", "uid": "influxdb" },
-          "query": "// Node 상태 목록 — 최신 데이터 기준\n// node_id, role, pod_id 태그와 state 필드를 함께 표시\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> last()\n  |> keep(columns: [\"node_id\", \"role\", \"pod_id\", \"_value\"])\n  |> rename(columns: {\"_value\": \"state\"})"
+          "query": "// Node 상태 목록 — 최신 데이터 기준\n// node_id, role, pod_id 태그와 state 필드를 함께 표시\n// 컬럼명을 사람이 읽기 좋은 형태로 정리\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"aci_node\")\n  |> filter(fn: (r) => r._field == \"state\")\n  |> last()\n  |> keep(columns: [\"node_id\", \"role\", \"pod_id\", \"_value\"])\n  |> rename(columns: {\n       \"_value\": \"state\",\n       \"node_id\": \"Node ID\",\n       \"role\": \"Role\",\n       \"pod_id\": \"Pod ID\"\n     })"
         }
       ]
     }

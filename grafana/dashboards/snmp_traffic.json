@@ -56,7 +56,14 @@
   "__comment_54": "  Row 패널 4개 추가 (id: 10~13)",
   "__comment_55": "  Interface Summary / Traffic / Errors & Drops / Interface Status",
   "__comment_56": "  각 패널 gridPos.y 조정",
-  "__comment_57": "=======================================================================",
+  "__comment_57": "",
+  "__comment_58": "v1.2.3 수정 내역 (문구 정리):",
+  "__comment_59": "  [패널 5]  title: '수신 트래픽 (BPS)' → '수신 트래픽 (bps)' (bits per second 명확화)",
+  "__comment_60": "  [패널 6]  title: '송신 트래픽 (BPS)' → '송신 트래픽 (bps)'",
+  "__comment_61": "  [패널 7]  legend: ifInErrors_rate → InErrors / ifOutErrors_rate → OutErrors",
+  "__comment_62": "  [패널 8]  legend: ifInDiscards_rate → InDiscards / ifOutDiscards_rate → OutDiscards",
+  "__comment_63": "  [패널 9]  Table 컬럼명 정리: Hostname / Device / Interface / Status, 순서 명시",
+  "__comment_64": "  [패널 9]  hotfix: last() 후 group() 추가 / SNMPv2c+v3 중복 행 dedup (group+first+group)",
   "id": null,
   "uid": "snmp-traffic-001",
   "title": "SNMP Traffic",
@@ -69,7 +76,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 38,
-  "version": 6,
+  "version": 11,
   "refresh": "1m",
   "time": {
     "from": "now-3h",
@@ -164,7 +171,12 @@
       "type": "row",
       "title": "Interface Summary",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 0, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "__comment": "-------------------------------------------------------------------",
@@ -391,7 +403,12 @@
       "type": "row",
       "title": "Traffic",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 5, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "__comment": "-------------------------------------------------------------------",
@@ -400,10 +417,11 @@
       "__comment_p5_2": "원래 source 태그 필터 방식으로 원복.",
       "__comment_p5_3": "[v1.2.1 수정] color fixed green 추가",
       "__comment_p5_4": "  수신(In/RX) 계열 색상 통일: green",
-      "__comment_p5_5": "-------------------------------------------------------------------",
+      "__comment_p5_5": "[v1.2.3 수정] title: '수신 트래픽 (BPS)' → '수신 트래픽 (bps)' (bits per second 명확화)",
+      "__comment_p5_6": "-------------------------------------------------------------------",
       "id": 5,
       "type": "timeseries",
-      "title": "수신 트래픽 (BPS)",
+      "title": "수신 트래픽 (bps)",
       "description": "인터페이스별 수신 트래픽. ifHCInOctets 기반 bits/s 변환값.",
       "gridPos": {
         "x": 0,
@@ -460,10 +478,11 @@
       "__comment_p6_1": "[v1.2.0 수정] source 태그 필터 원복",
       "__comment_p6_2": "[v1.2.1 수정] color fixed blue 추가",
       "__comment_p6_3": "  송신(Out/TX) 계열 색상 통일: blue",
-      "__comment_p6_4": "-------------------------------------------------------------------",
+      "__comment_p6_4": "[v1.2.3 수정] title: '송신 트래픽 (BPS)' → '송신 트래픽 (bps)' (bits per second 명확화)",
+      "__comment_p6_5": "-------------------------------------------------------------------",
       "id": 6,
       "type": "timeseries",
-      "title": "송신 트래픽 (BPS)",
+      "title": "송신 트래픽 (bps)",
       "description": "인터페이스별 송신 트래픽. ifHCOutOctets 기반 bits/s 변환값.",
       "gridPos": {
         "x": 12,
@@ -520,7 +539,12 @@
       "type": "row",
       "title": "Errors & Drops",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 14, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "__comment": "-------------------------------------------------------------------",
@@ -530,7 +554,9 @@
       "__comment_p7_3": "  InErrors=red (수신 에러, 심각)",
       "__comment_p7_4": "  OutErrors=orange (송신 에러, 경고)",
       "__comment_p7_5": "  byRegexp 매처: _field 이름에 In/Out 포함 여부로 구분",
-      "__comment_p7_6": "-------------------------------------------------------------------",
+      "__comment_p7_6": "[v1.2.3 수정] legend: ifInErrors_rate → InErrors / ifOutErrors_rate → OutErrors",
+      "__comment_p7_7": "  byRegexp 매처 '.*InErrors.*' / '.*OutErrors.*' 는 새 이름에도 그대로 매칭됨",
+      "__comment_p7_8": "-------------------------------------------------------------------",
       "id": 7,
       "type": "timeseries",
       "title": "에러 카운터 증가율",
@@ -622,7 +648,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "// 수신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifInErrors_rate\" }))"
+          "query": "// 수신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"InErrors\" }))"
         },
         {
           "refId": "B",
@@ -630,7 +656,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "// 송신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifOutErrors_rate\" }))"
+          "query": "// 송신 에러 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutErrors\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"OutErrors\" }))"
         }
       ]
     },
@@ -642,7 +668,9 @@
       "__comment_p8_3": "  InDiscards=orange (수신 드롭, 경고)",
       "__comment_p8_4": "  OutDiscards=yellow (송신 드롭, 주의)",
       "__comment_p8_5": "  에러(red/orange)보다 한 단계 낮은 심각도 표현",
-      "__comment_p8_6": "-------------------------------------------------------------------",
+      "__comment_p8_6": "[v1.2.3 수정] legend: ifInDiscards_rate → InDiscards / ifOutDiscards_rate → OutDiscards",
+      "__comment_p8_7": "  byRegexp 매처 '.*InDiscards.*' / '.*OutDiscards.*' 는 새 이름에도 그대로 매칭됨",
+      "__comment_p8_8": "-------------------------------------------------------------------",
       "id": 8,
       "type": "timeseries",
       "title": "드롭 카운터 증가율",
@@ -734,7 +762,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "// 수신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifInDiscards_rate\" }))"
+          "query": "// 수신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifInDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"InDiscards\" }))"
         },
         {
           "refId": "B",
@@ -742,7 +770,7 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "// 송신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"ifOutDiscards_rate\" }))"
+          "query": "// 송신 드롭 증가율\nfrom(bucket: v.bucket)\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOutDiscards\")\n  |> filter(fn: (r) => contains(value: r.hostname, set: ${hostname:json}))\n  |> filter(fn: (r) => contains(value: r.ifName, set: ${interface:json}))\n  |> filter(fn: (r) => contains(value: r.source, set: ${source:json}))\n  |> derivative(unit: 1s, nonNegative: true)\n  |> map(fn: (r) => ({ r with _field: \"OutDiscards\" }))"
         }
       ]
     },
@@ -752,14 +780,22 @@
       "type": "row",
       "title": "Interface Status",
       "collapsed": false,
-      "gridPos": { "x": 0, "y": 23, "w": 24, "h": 1 }
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 1
+      }
     },
     {
       "__comment": "-------------------------------------------------------------------",
       "__comment_p9": "패널 9 — 인터페이스 상태 목록 (Table)",
       "__comment_p9_1": "[v1.2.0 수정] _measurement → Device Type 컬럼으로 rename",
       "__comment_p9_2": "mappings 포맷 단일 object 로 통합",
-      "__comment_p9_3": "-------------------------------------------------------------------",
+      "__comment_p9_3": "[v1.2.3 수정] Table 컬럼명 정리 및 순서 지정",
+      "__comment_p9_4": "  hostname→Hostname / _measurement→Device / ifName→Interface / _value→Status",
+      "__comment_p9_5": "  ifAlias 는 vIOS/vNX-OS 실제 수집 데이터에 없으므로 keep/rename 에서 제외",
+      "__comment_p9_6": "[v1.2.3 hotfix] last() 후 group() 추가 — group key 해제로 컬럼 정상 분리",
       "id": 9,
       "type": "table",
       "title": "인터페이스 상태 목록",
@@ -785,7 +821,7 @@
             "__comment": "ifOperStatus 색상 매핑 — 모든 value 를 단일 options object 에 정의",
             "matcher": {
               "id": "byName",
-              "options": "ifOperStatus"
+              "options": "Status"
             },
             "properties": [
               {
@@ -823,7 +859,7 @@
             "__comment": "Device Type 컬럼 너비 고정",
             "matcher": {
               "id": "byName",
-              "options": "Device Type"
+              "options": "Device"
             },
             "properties": [
               {
@@ -837,7 +873,7 @@
       "options": {
         "sortBy": [
           {
-            "displayName": "ifOperStatus",
+            "displayName": "Status",
             "desc": false
           }
         ],
@@ -852,9 +888,30 @@
             "type": "influxdb",
             "uid": "influxdb"
           },
-          "query": "// 인터페이스 상태 테이블\n// _measurement 를 'Device Type' 으로 rename 하여 IOS/NX-OS 구분 표시\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOperStatus\")\n  |> last()\n  |> keep(columns: [\"_measurement\", \"hostname\", \"ifName\", \"ifAlias\", \"_value\"])\n  |> rename(columns: {\"_value\": \"ifOperStatus\", \"_measurement\": \"Device Type\"})"
+          "query": "// 인터페이스 상태 테이블\n// 컬럼명: Hostname / Device / Interface / Status\n// _measurement → Device (IOS/NX-OS 구분)\n// ifAlias 는 vIOS/vNX-OS 수집 데이터에 없으므로 제외\n// SNMPv2c+v3 중복 제거: group(measurement+hostname+ifName) → first()\n// 컬럼 순서 명시: keep([Hostname, Device, Interface, Status])\nfrom(bucket: v.bucket)\n  |> range(start: -5m)\n  |> filter(fn: (r) => r._measurement == \"cisco_ios_interface\" or r._measurement == \"cisco_nxos_interface\")\n  |> filter(fn: (r) => r._field == \"ifOperStatus\")\n  |> last()\n  |> group()\n  |> keep(columns: [\"_measurement\", \"hostname\", \"ifName\", \"_value\"])\n  |> group(columns: [\"_measurement\", \"hostname\", \"ifName\"])\n  |> first()\n  |> group()\n  |> rename(columns: {\n       \"_value\": \"Status\",\n       \"_measurement\": \"Device\",\n       \"hostname\": \"Hostname\",\n       \"ifName\": \"Interface\"\n     })\n  |> keep(columns: [\"Hostname\", \"Device\", \"Interface\", \"Status\"])"
         }
-      ]
+      ],
+      "__comment_p9_7": "[v1.2.3 hotfix2] SNMPv2c/v3 중복 행 제거 (group+first+group)",
+      "__comment_p9_8": "[v1.2.3 hotfix3] 컬럼 순서 지정: Hostname | Device | Interface | Status",
+      "__comment_p9_9": "  keep(columns: [...]) 으로 Grafana Table 컬럼 순서 명시",
+      "__comment_p9_10": "[v1.2.3 hotfix4] transformations organize 추가 — Grafana Table 컬럼 순서 강제",
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {},
+            "indexByName": {
+              "Hostname": 0,
+              "Device": 1,
+              "Interface": 2,
+              "Status": 3
+            },
+            "renameByName": {}
+          }
+        }
+      ],
+      "__comment_p9_11": "  Flux keep() 순서는 Grafana Table 이 무시함 → organize transformation 필수",
+      "__comment_p9_12": "-------------------------------------------------------------------"
     }
   ],
   "annotations": {
@@ -872,5 +929,6 @@
         "type": "dashboard"
       }
     ]
-  }
+  },
+  "__comment_65": "======================================================================="
 }
